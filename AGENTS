@@ -1,0 +1,18 @@
+# Battleship Lab Development Rules
+
+- Read docs/Readme.docx as the authoritative game specification.
+- Implement features incrementally.
+- Prefer simple, efficient Python implementations.
+- Reuse existing code. Never rewrite working modules unnecessarily.
+- Do not add features outside the requested scope.
+- Run relevant automated tests after changes.
+- Fix failures before reporting completion.
+- Keep responses under 150 words.
+- Report only changed files, test results, and blockers.
+- Do not paste full source files into chat.
+- Do not fabricate benchmark results.
+- Use no paid AI APIs.
+- Keep official and approximate simulation results clearly distinguished.
+- Preserve compatibility with MyBot(Bot) and on_state(state).
+- Use Windows-compatible commands and startup scripts.
+- Ask only when an essential requirement is missing.

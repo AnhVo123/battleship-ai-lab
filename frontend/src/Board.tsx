@@ -1,0 +1,41 @@
+import { useId, useState } from 'react';
+import type { Frame } from './types';
+import { teamColor } from './types';
+
+export function columnLabel(index:number):string {let result='';for(let n=index+1;n>0;n=Math.floor((n-1)/26))result=String.fromCharCode(65+(n-1)%26)+result;return result;}
+
+export default function Board({frame}: {frame: Frame | null}) {
+  const [selected, setSelected] = useState('all');
+  const [cellSize,setCellSize] = useState(16);
+  const [hovered,setHovered] = useState<number[]|null>(null);
+  const [picked,setPicked] = useState<number[]|null>(null);
+  const id = useId().replaceAll(':','');
+  const clipId = `seaClip${id}`, gridId=`grid${id}`;
+  const coordinate = hovered ?? picked;
+  function pointerCell(event: React.MouseEvent<SVGRectElement>) {const bounds=event.currentTarget.getBoundingClientRect();return [Math.max(0,Math.min(39,Math.floor((event.clientY-bounds.top)/bounds.height*40))),Math.max(0,Math.min(39,Math.floor((event.clientX-bounds.left)/bounds.width*40)))];}
+  const traces = frame?.traces.filter(t => selected === 'all' || t.seat === selected) ?? [];
+  const arc = traces[0];
+  const maxHeight = Math.max(1, ...(arc?.points.map(p => p[2]) ?? []));
+  return <div className="board-panel">
+    <div className="panel-heading"><div><span className="eyebrow">LIVE SEA / 40 × 40</span><h2>Battle field</h2></div>
+      <label>Trajectories<select aria-label="Trajectory team" value={selected} onChange={e => setSelected(e.target.value)}><option value="all">All teams</option>{frame?.teams.map(t => <option key={t.seat}>{t.seat}</option>)}</select></label></div>
+    <div className="grid-tools"><label>Zoom<input aria-label="Grid zoom" type="range" min="12" max="36" value={cellSize} onChange={e=>setCellSize(Number(e.target.value))}/></label><output aria-live="polite">{coordinate?`${columnLabel(coordinate[1])}${coordinate[0]+1} · [row ${coordinate[0]}, col ${coordinate[1]}]`:'Hover or click a cell'}</output></div>
+    <div className="grid-scroll" style={{'--cell-size':`${cellSize}px`} as React.CSSProperties}><div className="grid-sheet"><div className="grid-header"><span className="grid-corner">↘</span><div className="column-labels">{Array.from({length:40},(_,c)=><span key={c}>{columnLabel(c)}</span>)}</div></div><div className="grid-body"><div className="row-labels">{Array.from({length:40},(_,r)=><span key={r}>{r+1}</span>)}</div>
+    <svg viewBox="0 0 40 40" role="img" aria-label="40 by 40 battle board" className="sea" style={{width:cellSize*40,height:cellSize*40,maxHeight:'none',margin:0,flexShrink:0}}>
+      <defs><pattern id={gridId} width="1" height="1" patternUnits="userSpaceOnUse"><path d="M 1 0 L 0 0 0 1" fill="none" stroke="#284756" strokeWidth=".035"/></pattern><clipPath id={clipId}><rect width="40" height="40"/></clipPath></defs>
+      <rect width="40" height="40" fill="#102832"/><rect width="40" height="40" fill={`url(#${gridId})`}/>
+      <g clipPath={`url(#${clipId})`}>{frame?.teams.map(team => <g key={team.seat}>
+        {team.ships.flatMap(ship => ship.cells.map(([r,c]) => {
+          const holed = ship.holes.some(([hr,hc]) => hr === r && hc === c);
+          return <g key={`${ship.name}-${r}-${c}`}><rect x={c+.1} y={r+.1} width=".8" height=".8" rx=".15" fill={teamColor(team.seat)} opacity={ship.sunk ? .25 : holed ? .45 : .9}><title>{team.seat} · {ship.name} [{r}, {c}] {holed ? 'hit' : 'afloat'}</title></rect>{holed && <path d={`M${c+.2} ${r+.2}l.6 .6m0-.6l-.6 .6`} stroke="#fff" strokeWidth=".08"/>}</g>;
+        }))}
+        {team.shots.map(([r,c,result], index) => <circle key={index} cx={Number(c)+.5} cy={Number(r)+.5} r=".17" fill={['hit','sunk','self_hit'].includes(String(result)) ? '#ff6b6b' : '#c8e2ec'}><title>{team.seat}: {String(result)}</title></circle>)}
+      </g>)}
+      {traces.map((trace, i) => <g key={i}><polyline points={trace.points.map(p => `${p[1]+.5},${p[0]+.5}`).join(' ')} fill="none" stroke={teamColor(trace.seat)} strokeWidth=".09" strokeDasharray=".3 .2"/><circle cx={trace.landing[1]+.5} cy={trace.landing[0]+.5} r=".38" fill="none" stroke={teamColor(trace.seat)} strokeWidth=".1"/></g>)}</g>
+      {picked&&<rect x={picked[1]+.04} y={picked[0]+.04} width=".92" height=".92" fill="none" stroke="#fff" strokeWidth=".08"/>}
+      <rect width="40" height="40" fill="transparent" role="button" aria-label="Battle grid coordinate picker" tabIndex={0} onMouseMove={e=>{const cell=pointerCell(e);setHovered(old=>old?.[0]===cell[0]&&old?.[1]===cell[1]?old:cell);}} onMouseLeave={()=>setHovered(null)} onClick={e=>setPicked(pointerCell(e))} onKeyDown={e=>{const [r,c]=picked??[0,0];const moves:Record<string,number[]>={ArrowUp:[r-1,c],ArrowDown:[r+1,c],ArrowLeft:[r,c-1],ArrowRight:[r,c+1],Enter:[r,c],' ':[r,c]};if(moves[e.key]){e.preventDefault();setPicked(moves[e.key].map(n=>Math.max(0,Math.min(39,n))));}}}><title>{coordinate?`${columnLabel(coordinate[1])}${coordinate[0]+1} · row ${coordinate[0]}, col ${coordinate[1]}`:'Hover or click a cell; arrow keys select coordinates'}</title></rect>
+    </svg></div></div></div>
+    <div className="sea-footer"><span>Top-down paths · dashed lines show latest tick</span><span className="wind-indicator"><svg width="40" height="40" viewBox="0 0 40 40" role="img" aria-label="Wind direction and strength"><defs><marker id="wind-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0 0L5 2.5L0 5" fill="#63e6be"/></marker></defs><circle cx="20" cy="20" r="18" fill="none" stroke="#3a535e"/><path d="M20 2V6M20 34V38M2 20H6M34 20H38" stroke="#7ea7b2"/><line x1="20" y1="20" x2={20+(frame?.wind[1] ?? 0)*15} y2={20+(frame?.wind[0] ?? 0)*15} stroke="#63e6be" strokeWidth="1.5" markerEnd="url(#wind-arrow)"/></svg><span>Wind <b>{frame?.wind.map(n => n.toFixed(2)).join(', ') ?? '—'}</b><small>(row, col) · constant</small></span></span></div>
+    {arc && <div className="arc"><div><span className="eyebrow">FLIGHT PROFILE · TEAM {arc.seat}</span><p>{arc.kind} / {arc.result} · {arc.flight_seconds.toFixed(2)} s</p></div><svg viewBox="0 0 240 60" role="img" aria-label="Shot height over flight time"><path d="M0 55H240" stroke="#466371"/><polyline points={arc.points.map((p,i) => `${i/(arc.points.length-1)*240},${55-p[2]/maxHeight*45}`).join(' ')} fill="none" stroke={teamColor(arc.seat)} strokeWidth="2"/></svg></div>}
+  </div>;
+}
