@@ -28,8 +28,8 @@ export default function App() {
   const [carryover,setCarryover] = useState<{id:string;points:number}|null>(null);
   const [advanced,setAdvanced] = useState(false);
   const [carrySources,setCarrySources] = useState<{id:string;points:number;label:string}[]>([]);
-  const purchase = Object.fromEntries(Object.entries(loadout).filter(([name,count])=>unlocked(round).includes(name)&&count>0));
-  const spent = Object.entries(purchase).reduce((sum,[name,count])=>sum+COSTS[name]*count,0);
+  const purchase = useMemo(() => Object.fromEntries(Object.entries(loadout).filter(([name,count])=>unlocked(round).includes(name)&&count>0)), [loadout,round]);
+  const spent = useMemo(() => Object.entries(purchase).reduce((sum,[name,count])=>sum+COSTS[name]*count,0), [purchase]);
   const budget = (round==='round1'?0:10)+(round==='final'&&advanced&&carryover?carryover.points:0);
   const [battle,setBattle] = useState('');
   const [frames,setFrames] = useState<Frame[]>([]);
@@ -111,7 +111,7 @@ export default function App() {
       <div className="aside-note"><b>Local approximation</b><p>Official engine unavailable. Wind, placement, and results follow the documented local model.</p></div>
     </aside><main>{tab === 'diagnostics' && <Diagnostics battle={battle}/>}
     {tab === 'battle' && <><div className="toolbar"><div><span className="eyebrow">{cursor < frames.length-1 ? 'REPLAY' : frame?.finished ? 'BATTLE COMPLETE' : 'LIVE SESSION'}</span><h2>Tick {frame?.tick ?? '—'} <span className="muted">/ 120</span></h2></div></div>
-      <Board frame={frame} history={frames} speed={speed}/><ReplayTimeline tick={cursor} maxTick={Math.max(0,frames.length-1)} playing={playing} speed={speed} disabled={!frames.length||busy} canNext={canNext&&!stepping} onSeek={seek} onNext={()=>{setPlaying(false);void advance();}} onToggle={()=>setPlaying(!playing)} onSpeed={setSpeed}/><BattleResults finalFrame={finalFrame}/>
+      <Board frame={frame} history={frames} speed={speed} playing={playing}/><ReplayTimeline tick={cursor} maxTick={Math.max(0,frames.length-1)} playing={playing} speed={speed} disabled={!frames.length||busy} canNext={canNext&&!stepping} onSeek={seek} onNext={()=>{setPlaying(false);void advance();}} onToggle={()=>setPlaying(!playing)} onSpeed={setSpeed}/><BattleResults finalFrame={finalFrame}/>
       <div className="team-list">{frame?.teams.map(t => <div className="team-card" key={t.seat}><span className="team-chip" style={{background:teamColor(t.seat)}}>{t.seat}</span><div><b>{t.seat==='A' ? 'Your strategy' : `Opponent ${t.seat}`}</b><small>{t.eliminated ? 'Eliminated' : !t.connected ? 'Disconnected' : `${t.ships.filter(s => !s.sunk).length} ships afloat`}</small></div><strong>{t.score}<small>PTS</small></strong><BoosterDetails team={t}/></div>)}</div>
       {frame?.armory&&<p className="fine">Team A {frame.armory.expired?'expired inventory':'current inventory'}: {Object.entries(frame.armory.inventory).map(([name,count])=>`${name} ${count}`).join(' · ')} · Unspent purchase points: {frame.armory.remaining_points}</p>}
       {frame?.runtime_error&&<p role="alert" className="error">{frame.runtime_error}</p>}

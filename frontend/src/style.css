@@ -19,6 +19,8 @@ textarea{width:100%;padding:15px;margin-top:10px;background:#0c191f;color:#dbe7e
 @keyframes teleport-shift { from { transform:scale(.2) rotate(-20deg); opacity:0; } 50% { opacity:1; } to { transform:scale(1); opacity:.3; } }
 @media (prefers-reduced-motion:reduce) { .trajectory polyline,.activation-ring,.impact-ring,.effect-impact,.flare-zone,.teleport-cell { animation:none; } }
 .effect-impact,.impact-ring { animation-duration:calc(var(--effect-duration,300ms)*.35); animation-delay:calc(var(--effect-duration,300ms)*.65); }
+.sea { contain: strict; shape-rendering: geometricPrecision; }
+.trajectory polyline,.impact-ring,.activation-ring,.effect-impact,.flare-zone,.teleport-cell,.sinking-cell { will-change: transform, opacity; }
 .sinking-cell { animation:flare-light var(--effect-duration,300ms) ease-out both; }
 .team-card { flex-wrap:wrap; }
 .team-card > .booster-details { flex-basis:100%; }

@@ -4,7 +4,7 @@ import { teamColor } from './types';
 
 export function columnLabel(index:number):string {let result='';for(let n=index+1;n>0;n=Math.floor((n-1)/26))result=String.fromCharCode(65+(n-1)%26)+result;return result;}
 
-function Board({frame,history,speed=1}: {frame: Frame | null;history?:Frame[];speed?:number}) {
+function Board({frame,history,speed=1}: {frame: Frame | null;history?:Frame[];speed?:number;playing?:boolean}) {
   const [selected, setSelected] = useState('all');
   const [cellSize,setCellSize] = useState(16);
   const [hovered,setHovered] = useState<number[]|null>(null);
@@ -19,9 +19,11 @@ function Board({frame,history,speed=1}: {frame: Frame | null;history?:Frame[];sp
   const shotCells=useMemo(()=>{
   const shotCells=new Map<string,{r:number;c:number;points:number;details:string[]}>();
   for(const recorded of history??(frame?[frame]:[])) {
-    if(frame&&recorded.tick>frame.tick)continue;
-    const targets=new Map(recorded.teams.flatMap(t=>t.ships.flatMap(ship=>ship.cells.map(([r,c])=>[`${r}-${c}`,ship] as const))));
-    for(const team of recorded.teams.filter(t=>selected==='all'||t.seat===selected)) {
+    if(frame&&recorded.tick>frame.tick)break;
+    const targets=new Map<string, {cells:number[][]}>();
+    for(const team of recorded.teams) for(const ship of team.ships) for(const [r,c] of ship.cells) targets.set(`${r}-${c}`,ship);
+    for(const team of recorded.teams) {
+      if(selected!=='all'&&team.seat!==selected)continue;
       const torpedo=recorded.traces.some(trace=>trace.seat===team.seat&&trace.kind==='torpedo');
       const firstScoringShot=team.shots.findIndex(shot=>shot[2]==='hit'||shot[2]==='sunk');
       team.shots.forEach(([row,col,result],index)=>{
@@ -32,13 +34,13 @@ function Board({frame,history,speed=1}: {frame: Frame | null;history?:Frame[];sp
         const key=`${r}-${c}`;
         const cell=shotCells.get(key)??{r,c,points:0,details:[]};
         cell.points+=points;
-        cell.details.push(`${team.seat}: ${String(result)} (${points} points), tick ${recorded.tick}`);
+        if(cell.details.length<8)cell.details.push(`${team.seat}: ${String(result)} (${points} points), tick ${recorded.tick}`);
         shotCells.set(key,cell);
       });
     }
   }
   return shotCells;
-  },[frame,history,selected]);
+  },[frame?.tick,history,selected]);
   const scene=useMemo(()=>(<g clipPath={`url(#${clipId})`}>{frame?.teams.map(team => <g key={team.seat}>
         {team.ships.flatMap(ship => ship.cells.map(([r,c]) => {
           const holed = ship.holes.some(([hr,hc]) => hr === r && hc === c);
@@ -50,17 +52,17 @@ function Board({frame,history,speed=1}: {frame: Frame | null;history?:Frame[];sp
         <rect x={c+.08} y={r+.08} width=".84" height=".84" fill="#102832" fillOpacity=".8" stroke={points>0?'#63e6be':'#c8e2ec'} strokeWidth=".055"/>
         <text x={c+.5} y={r+.71} textAnchor="middle" fontSize=".65" fontWeight="bold" fill={points>0?'#63e6be':'#c8e2ec'} pointerEvents="none">{points}</text>
       </g>)}
-      {traces.map((trace, i) => <g key={`${frame?.tick}-${i}`} className={`trajectory trajectory-${trace.kind}`}><polyline points={trace.points.map(p => `${p[1]+.5},${p[0]+.5}`).join(' ')} fill="none" stroke={teamColor(trace.seat)} strokeWidth={trace.kind==='torpedo'?'.2':'.09'} strokeDasharray=".3 .2"/><circle className="impact-ring" cx={trace.landing[1]+.5} cy={trace.landing[0]+.5} r=".38" fill="none" stroke={teamColor(trace.seat)} strokeWidth=".1"/></g>)}
-      {traces.map((trace,i)=><circle key={`projectile-${frame?.tick}-${i}`} className="projectile" r={trace.kind==='torpedo'?'.18':'.12'} fill={trace.kind==='flare'?'#ffe066':teamColor(trace.seat)}><animateMotion dur={`${Math.min(1000,300/speed)*.65}ms`} fill="freeze" path={trace.points.map((p,j)=>`${j?'L':'M'}${p[1]+.5},${p[0]+.5}`).join(' ')}/></circle>)}
+      {traces.map((trace, i) => <g key={`${frame?.tick}-${i}`} className={`trajectory trajectory-${trace.kind}`}><polyline points={trace.points.map(p => `${p[1]+.5},${p[0]+.5}`).join(' ')} fill="none" stroke={trace.kind==='cluster'||trace.kind==='torpedo'?'#ff3b30':teamColor(trace.seat)} strokeWidth={trace.kind==='torpedo'?'.2':'.09'} strokeDasharray=".3 .2"/><circle className="impact-ring" cx={trace.landing[1]+.5} cy={trace.landing[0]+.5} r=".38" fill="none" stroke={trace.kind==='cluster'||trace.kind==='torpedo'?'#ff3b30':teamColor(trace.seat)} strokeWidth=".1"/></g>)}
+      {traces.map((trace,i)=><circle key={`projectile-${frame?.tick}-${i}`} className="projectile" r={trace.kind==='torpedo'?'.18':'.12'} fill={trace.kind==='cluster'||trace.kind==='torpedo'?'#ff3b30':trace.kind==='flare'?'#ffe066':teamColor(trace.seat)}><animateMotion dur={`${Math.min(1000,300/speed)*.65}ms`} fill="freeze" path={trace.points.map((p,j)=>`${j?'L':'M'}${p[1]+.5},${p[0]+.5}`).join(' ')}/></circle>)}
       <g key={frame?.tick} className="battle-effects" pointerEvents="none">
         {frame?.events?.filter(e=>selected==='all'||e.seat===selected).map((event,i)=><g key={i} className={`effect-${event.kind}`} aria-label={`${event.seat} ${event.kind} activation`}>
           <circle className="activation-ring" cx={event.origin[1]+.5} cy={event.origin[0]+.5} r=".6" fill="none" stroke={teamColor(event.seat)} strokeWidth=".12"/>
           {event.kind==='flare'&&event.results[0]&&<rect className="flare-zone" x={Number(event.results[0][1])-3} y={Number(event.results[0][0])-3} width="7" height="7" fill="#ffe066" fillOpacity=".18" stroke="#ffe066" strokeWidth=".1"/>}
           {event.kind==='teleport'&&[...event.from_cells,...event.cells].map(([r,c],j)=><rect key={j} className="teleport-cell" x={c+.05} y={r+.05} width=".9" height=".9" rx=".2" fill="#da77f2" fillOpacity=".35" stroke="#da77f2" strokeWidth=".12"/>)}
           {event.sunk_cells?.map(([r,c],j)=><rect key={`sunk-${j}`} className="sinking-cell" x={c} y={r} width="1" height="1" fill="#ff6b6b" fillOpacity=".2" stroke="#ff6b6b" strokeWidth=".15"/>)}
-          {event.results.filter(s=>s[2]!=='flare').map(([r,c,result],j)=><circle key={j} className={`effect-impact impact-${result}`} cx={Number(c)+.5} cy={Number(r)+.5} r={result==='sunk'?'.65':'.4'} fill={result==='hit'||result==='sunk'?'#ff922b':'#74c0fc'} fillOpacity=".55" stroke={event.kind==='cluster'?'#ffd43b':'#fff'} strokeWidth=".08"><title>{event.seat} {event.kind}: {String(result)}</title></circle>)}
+          {event.results.filter(s=>s[2]!=='flare').map(([r,c,result],j)=><circle key={j} className={`effect-impact impact-${result}`} cx={Number(c)+.5} cy={Number(r)+.5} r={result==='sunk'?'.65':'.4'} fill={result==='hit'||result==='sunk'?'#ff922b':'#74c0fc'} fillOpacity=".55" stroke={event.kind==='cluster'||event.kind==='torpedo'?'#ff3b30':'#fff'} strokeWidth=".08"><title>{event.seat} {event.kind}: {String(result)}</title></circle>)}
         </g>)}
-      </g></g>),[frame,selected,shotCells,speed,clipId]);
+  </g></g>),[frame,selected,shotCells,speed,clipId]);
   return <div className="board-panel" style={{'--effect-duration':`${Math.min(1000,300/speed)}ms`} as React.CSSProperties}>
     <div className="panel-heading"><div><span className="eyebrow">LIVE SEA / 40 × 40</span><h2>Battle field</h2></div>
       <label>Trajectories<select aria-label="Trajectory team" value={selected} onChange={e => setSelected(e.target.value)}><option value="all">All teams</option>{frame?.teams.map(t => <option key={t.seat}>{t.seat}</option>)}</select></label></div>
