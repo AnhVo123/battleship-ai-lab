@@ -1,0 +1,696 @@
+{
+  "engine_kind": "local_approximation",
+  "opponent": "extreme / Competitive Optimizer (local)",
+  "pool": "development",
+  "seeds": [
+    24852108579370709378,
+    34454400083665830074,
+    21207824173452620246,
+    17124803296597310758,
+    10511533001433306704,
+    29406270595863225080,
+    24154082012152431414,
+    6331814747217885638
+  ],
+  "teams": {
+    "2": {
+      "summary": {
+        "baseline": {
+          "rank1": {
+            "rate": 0.625,
+            "ci95": [
+              0.30573785458380187,
+              0.863158240538479
+            ],
+            "n": 8
+          },
+          "score": {
+            "mean": 7,
+            "ci95": [
+              5.716878805412365,
+              8.283121194587634
+            ],
+            "n": 8
+          },
+          "scoring_efficiency": {
+            "mean": 0.029166666666666667,
+            "ci95": [
+              0.023820328355884855,
+              0.034513004977448476
+            ],
+            "n": 8
+          },
+          "points_per_shot": {
+            "mean": 0.058333333333333334,
+            "ci95": [
+              0.04764065671176971,
+              0.06902600995489695
+            ],
+            "n": 8
+          },
+          "runtime_mean_ms": {
+            "mean": 1.23697041660004,
+            "ci95": [
+              0.6349174990270848,
+              1.8390233341729951
+            ],
+            "n": 8
+          },
+          "runtime_max_ms": 32.45420000166632,
+          "timeouts": 0,
+          "errors": []
+        },
+        "optimized": {
+          "rank1": {
+            "rate": 0.5,
+            "ci95": [
+              0.21521252682444186,
+              0.7847874731755582
+            ],
+            "n": 8
+          },
+          "score": {
+            "mean": 11.75,
+            "ci95": [
+              6.488811921248206,
+              17.011188078751793
+            ],
+            "n": 8
+          },
+          "scoring_efficiency": {
+            "mean": 0.051041666666666666,
+            "ci95": [
+              0.02826737408099504,
+              0.07381595925233829
+            ],
+            "n": 8
+          },
+          "points_per_shot": {
+            "mean": 0.09791666666666667,
+            "ci95": [
+              0.05407343267706838,
+              0.14175990065626495
+            ],
+            "n": 8
+          },
+          "runtime_mean_ms": {
+            "mean": 26.808655937535757,
+            "ci95": [
+              25.393000792818086,
+              28.22431108225343
+            ],
+            "n": 8
+          },
+          "runtime_max_ms": 61.57360000361223,
+          "timeouts": 0,
+          "errors": []
+        }
+      },
+      "paired_optimized_minus_baseline": {
+        "win": {
+          "mean": -0.125,
+          "ci95": [
+            -0.7032949074650406,
+            0.45329490746504064
+          ],
+          "n": 8
+        },
+        "score": {
+          "mean": 4.75,
+          "ci95": [
+            0.2476339553519198,
+            9.252366044648081
+          ],
+          "n": 8
+        },
+        "scoring_efficiency": {
+          "mean": 0.021875,
+          "ci95": [
+            0.00188572336087282,
+            0.041864276639127174
+          ],
+          "n": 8
+        }
+      },
+      "records": {
+        "baseline": [
+          {
+            "seed": 24852108579370709378,
+            "score": 6,
+            "rank": 1,
+            "win": 1,
+            "scoring_efficiency": 0.025,
+            "points_per_shot": 0.05,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 0.9649924993330691,
+            "runtime_max_ms": 2.170399995520711
+          },
+          {
+            "seed": 34454400083665830074,
+            "score": 6,
+            "rank": 2,
+            "win": 0,
+            "scoring_efficiency": 0.025,
+            "points_per_shot": 0.05,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 1.2800691661444337,
+            "runtime_max_ms": 32.45420000166632
+          },
+          {
+            "seed": 21207824173452620246,
+            "score": 6,
+            "rank": 2,
+            "win": 0,
+            "scoring_efficiency": 0.025,
+            "points_per_shot": 0.05,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 0.8260350009853331,
+            "runtime_max_ms": 1.6586999990977347
+          },
+          {
+            "seed": 17124803296597310758,
+            "score": 6,
+            "rank": 1,
+            "win": 1,
+            "scoring_efficiency": 0.025,
+            "points_per_shot": 0.05,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 3.3536308338322365,
+            "runtime_max_ms": 4.7848999965935946
+          },
+          {
+            "seed": 10511533001433306704,
+            "score": 10,
+            "rank": 1,
+            "win": 1,
+            "scoring_efficiency": 0.041666666666666664,
+            "points_per_shot": 0.08333333333333333,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 0.9255083325115265,
+            "runtime_max_ms": 1.909299986436963
+          },
+          {
+            "seed": 29406270595863225080,
+            "score": 6,
+            "rank": 1,
+            "win": 1,
+            "scoring_efficiency": 0.025,
+            "points_per_shot": 0.05,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 0.8280583331118881,
+            "runtime_max_ms": 1.8454999953974038
+          },
+          {
+            "seed": 24154082012152431414,
+            "score": 10,
+            "rank": 2,
+            "win": 0,
+            "scoring_efficiency": 0.041666666666666664,
+            "points_per_shot": 0.08333333333333333,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 0.9239066667457033,
+            "runtime_max_ms": 1.854400004958734
+          },
+          {
+            "seed": 6331814747217885638,
+            "score": 6,
+            "rank": 1,
+            "win": 1,
+            "scoring_efficiency": 0.025,
+            "points_per_shot": 0.05,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 0.7935625001361283,
+            "runtime_max_ms": 1.560300006531179
+          }
+        ],
+        "optimized": [
+          {
+            "seed": 24852108579370709378,
+            "score": 0,
+            "rank": 2,
+            "win": 0,
+            "scoring_efficiency": 0.0,
+            "points_per_shot": 0.0,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 26.070260000778944,
+            "runtime_max_ms": 53.756900000735186
+          },
+          {
+            "seed": 34454400083665830074,
+            "score": 14,
+            "rank": 2,
+            "win": 0,
+            "scoring_efficiency": 0.075,
+            "points_per_shot": 0.11666666666666667,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 25.26737416665128,
+            "runtime_max_ms": 50.51669999375008
+          },
+          {
+            "seed": 21207824173452620246,
+            "score": 8,
+            "rank": 1,
+            "win": 1,
+            "scoring_efficiency": 0.03333333333333333,
+            "points_per_shot": 0.06666666666666667,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 31.27568916703846,
+            "runtime_max_ms": 61.57360000361223
+          },
+          {
+            "seed": 17124803296597310758,
+            "score": 16,
+            "rank": 1,
+            "win": 1,
+            "scoring_efficiency": 0.06666666666666667,
+            "points_per_shot": 0.13333333333333333,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 26.642670000122354,
+            "runtime_max_ms": 55.45470000652131
+          },
+          {
+            "seed": 10511533001433306704,
+            "score": 24,
+            "rank": 1,
+            "win": 1,
+            "scoring_efficiency": 0.1,
+            "points_per_shot": 0.2,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 28.15103749926493,
+            "runtime_max_ms": 54.6642000117572
+          },
+          {
+            "seed": 29406270595863225080,
+            "score": 12,
+            "rank": 2,
+            "win": 0,
+            "scoring_efficiency": 0.05,
+            "points_per_shot": 0.1,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 26.372859999416203,
+            "runtime_max_ms": 52.210900001227856
+          },
+          {
+            "seed": 24154082012152431414,
+            "score": 16,
+            "rank": 1,
+            "win": 1,
+            "scoring_efficiency": 0.06666666666666667,
+            "points_per_shot": 0.13333333333333333,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 25.472944166782934,
+            "runtime_max_ms": 57.08729999605566
+          },
+          {
+            "seed": 6331814747217885638,
+            "score": 4,
+            "rank": 2,
+            "win": 0,
+            "scoring_efficiency": 0.016666666666666666,
+            "points_per_shot": 0.03333333333333333,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 25.216412500230945,
+            "runtime_max_ms": 57.517399996868335
+          }
+        ]
+      }
+    },
+    "6": {
+      "summary": {
+        "baseline": {
+          "rank1": {
+            "rate": 0.125,
+            "ci95": [
+              0.02241690886329617,
+              0.4708948057698615
+            ],
+            "n": 8
+          },
+          "score": {
+            "mean": 18.5,
+            "ci95": [
+              13.274791870173974,
+              23.725208129826026
+            ],
+            "n": 8
+          },
+          "scoring_efficiency": {
+            "mean": 0.08020833333333333,
+            "ci95": [
+              0.05552671483561996,
+              0.10488995183104668
+            ],
+            "n": 8
+          },
+          "points_per_shot": {
+            "mean": 0.15416666666666667,
+            "ci95": [
+              0.11062326558478312,
+              0.1977100677485502
+            ],
+            "n": 8
+          },
+          "runtime_mean_ms": {
+            "mean": 2.0583737502420263,
+            "ci95": [
+              0.40069941645225904,
+              3.7160480840317938
+            ],
+            "n": 8
+          },
+          "runtime_max_ms": 26.163999995333143,
+          "timeouts": 0,
+          "errors": []
+        },
+        "optimized": {
+          "rank1": {
+            "rate": 0.125,
+            "ci95": [
+              0.02241690886329617,
+              0.4708948057698615
+            ],
+            "n": 8
+          },
+          "score": {
+            "mean": 27.625,
+            "ci95": [
+              19.95360996950357,
+              35.296390030496426
+            ],
+            "n": 8
+          },
+          "scoring_efficiency": {
+            "mean": 0.1125,
+            "ci95": [
+              0.08147894979928055,
+              0.14352105020071945
+            ],
+            "n": 8
+          },
+          "points_per_shot": {
+            "mean": 0.23020833333333335,
+            "ci95": [
+              0.16628008307919645,
+              0.29413658358747025
+            ],
+            "n": 8
+          },
+          "runtime_mean_ms": {
+            "mean": 25.531131458274103,
+            "ci95": [
+              23.563429344548446,
+              27.49883357199976
+            ],
+            "n": 8
+          },
+          "runtime_max_ms": 81.53840000159107,
+          "timeouts": 0,
+          "errors": []
+        }
+      },
+      "paired_optimized_minus_baseline": {
+        "win": {
+          "mean": 0,
+          "ci95": [
+            -0.37040518354904267,
+            0.37040518354904267
+          ],
+          "n": 8
+        },
+        "score": {
+          "mean": 9.125,
+          "ci95": [
+            -0.35069654431799435,
+            18.600696544317994
+          ],
+          "n": 8
+        },
+        "scoring_efficiency": {
+          "mean": 0.03229166666666667,
+          "ci95": [
+            -0.007530180526662877,
+            0.07211351385999622
+          ],
+          "n": 8
+        }
+      },
+      "records": {
+        "baseline": [
+          {
+            "seed": 24852108579370709378,
+            "score": 14,
+            "rank": 6,
+            "win": 0,
+            "scoring_efficiency": 0.058333333333333334,
+            "points_per_shot": 0.11666666666666667,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 0.8624675017927075,
+            "runtime_max_ms": 1.7399000062141567
+          },
+          {
+            "seed": 34454400083665830074,
+            "score": 14,
+            "rank": 5,
+            "win": 0,
+            "scoring_efficiency": 0.058333333333333334,
+            "points_per_shot": 0.11666666666666667,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 0.8910224993693797,
+            "runtime_max_ms": 1.887099992018193
+          },
+          {
+            "seed": 21207824173452620246,
+            "score": 12,
+            "rank": 5,
+            "win": 0,
+            "scoring_efficiency": 0.05,
+            "points_per_shot": 0.1,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 0.828314167180603,
+            "runtime_max_ms": 1.5109999949345365
+          },
+          {
+            "seed": 17124803296597310758,
+            "score": 16,
+            "rank": 4,
+            "win": 0,
+            "scoring_efficiency": 0.06666666666666667,
+            "points_per_shot": 0.13333333333333333,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 2.8684958338999422,
+            "runtime_max_ms": 6.501900003058836
+          },
+          {
+            "seed": 10511533001433306704,
+            "score": 20,
+            "rank": 3,
+            "win": 0,
+            "scoring_efficiency": 0.09166666666666666,
+            "points_per_shot": 0.16666666666666666,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 1.4820174991958386,
+            "runtime_max_ms": 8.153800008585677
+          },
+          {
+            "seed": 29406270595863225080,
+            "score": 12,
+            "rank": 5,
+            "win": 0,
+            "scoring_efficiency": 0.05,
+            "points_per_shot": 0.1,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 0.9144924999418436,
+            "runtime_max_ms": 1.7652999958954751
+          },
+          {
+            "seed": 24154082012152431414,
+            "score": 30,
+            "rank": 2,
+            "win": 0,
+            "scoring_efficiency": 0.125,
+            "points_per_shot": 0.25,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 0.8959083343749322,
+            "runtime_max_ms": 1.6966999974101782
+          },
+          {
+            "seed": 6331814747217885638,
+            "score": 30,
+            "rank": 1,
+            "win": 1,
+            "scoring_efficiency": 0.14166666666666666,
+            "points_per_shot": 0.25,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 7.724271666180964,
+            "runtime_max_ms": 26.163999995333143
+          }
+        ],
+        "optimized": [
+          {
+            "seed": 24852108579370709378,
+            "score": 16,
+            "rank": 5,
+            "win": 0,
+            "scoring_efficiency": 0.06666666666666667,
+            "points_per_shot": 0.13333333333333333,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 26.802311666324385,
+            "runtime_max_ms": 81.53840000159107
+          },
+          {
+            "seed": 34454400083665830074,
+            "score": 30,
+            "rank": 3,
+            "win": 0,
+            "scoring_efficiency": 0.10833333333333334,
+            "points_per_shot": 0.25,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 22.277250833334012,
+            "runtime_max_ms": 66.05160000617616
+          },
+          {
+            "seed": 21207824173452620246,
+            "score": 47,
+            "rank": 1,
+            "win": 1,
+            "scoring_efficiency": 0.19166666666666668,
+            "points_per_shot": 0.39166666666666666,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 30.302911666512955,
+            "runtime_max_ms": 52.60999999882188
+          },
+          {
+            "seed": 17124803296597310758,
+            "score": 10,
+            "rank": 5,
+            "win": 0,
+            "scoring_efficiency": 0.041666666666666664,
+            "points_per_shot": 0.08333333333333333,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 26.240256666763646,
+            "runtime_max_ms": 57.41839999973308
+          },
+          {
+            "seed": 10511533001433306704,
+            "score": 27,
+            "rank": 2,
+            "win": 0,
+            "scoring_efficiency": 0.11666666666666667,
+            "points_per_shot": 0.225,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 24.012582500169326,
+            "runtime_max_ms": 75.19489999685902
+          },
+          {
+            "seed": 29406270595863225080,
+            "score": 32,
+            "rank": 2,
+            "win": 0,
+            "scoring_efficiency": 0.13333333333333333,
+            "points_per_shot": 0.26666666666666666,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 25.222647499928524,
+            "runtime_max_ms": 55.98810000810772
+          },
+          {
+            "seed": 24154082012152431414,
+            "score": 31,
+            "rank": 2,
+            "win": 0,
+            "scoring_efficiency": 0.125,
+            "points_per_shot": 0.25833333333333336,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 27.625309999954577,
+            "runtime_max_ms": 57.739399999263696
+          },
+          {
+            "seed": 6331814747217885638,
+            "score": 28,
+            "rank": 2,
+            "win": 0,
+            "scoring_efficiency": 0.11666666666666667,
+            "points_per_shot": 0.23333333333333334,
+            "shots": 120,
+            "timeouts": 0,
+            "errors": [],
+            "runtime_mean_ms": 21.7657808332054,
+            "runtime_max_ms": 54.33240000274964
+          }
+        ]
+      }
+    }
+  },
+  "source_sha256": {
+    "baseline": "bf0d58db8fad3608cd8c0226bfd9ab1ce0d3c804d3dbc20d63b88b24f95e1725",
+    "optimized": "ba91e2a2bd078b8746678009209486a36d67c7739a6c3154c907e7942c261669"
+  },
+  "notes": [
+    "Local approximate physics and opponents; no official parity claim.",
+    "120-tick round1; zero boosters; same placement, wind and bot seeds per pair.",
+    "Runtime includes private state construction; direct callback runner.",
+    "Scoring efficiency is enemy hit/sunk outcomes divided by accepted shells.",
+    "Small samples: confidence intervals and paired deltas are in this report."
+  ]
+}

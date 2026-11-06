@@ -5,15 +5,15 @@ import json
 import math
 from pathlib import Path
 import statistics
-from .opponents import LEVELS, Opponent
+from .opponents import LEVELS, Opponent, opponent_loadout
 from .simulation import BOOSTERS, Battle, RoundConfig
 from .strategies import StrategyProcess, import_strategy
 from .diagnostics import EvidenceRecorder, diagnose, benchmark_diagnostics
 
 
 def seed_pool(pool="development", count=100, master_seed=0):
-    if pool not in ("development", "holdout") or type(count) is not int or not 100 <= count <= 1000:
-        raise ValueError("Choose development/holdout and 100–1000 matches")
+    if pool not in ("development", "holdout") or type(count) is not int or not 1 <= count <= 1000:
+        raise ValueError("Choose development/holdout and 1–1000 matches")
     parity = int(pool == "holdout")
     return [2 * int.from_bytes(hashlib.sha256(f"{master_seed}:{i}".encode()).digest()[:8], "big") + parity for i in range(count)]
 
@@ -37,8 +37,9 @@ def win_ci(wins):
 
 
 def run_match(version, seed, teams=2, round_name="round1", level="medium", loadout=None):
-    battle = Battle(seed, seats=teams, config=RoundConfig.preset(round_name),
-                    purchases={s: dict(loadout or {}) for s in "ABCDEFGHIJKLMNOPQRST"[:teams]})
+    config = RoundConfig.preset(round_name)
+    purchases = {s: opponent_loadout(config, level, s) for s in "ABCDEFGHIJKLMNOPQRST"[1:teams]}
+    battle = Battle(seed, seats=teams, config=config, purchases={**purchases, "A": dict(loadout or {})})
     opponents = {s: Opponent(level, f"{seed}:bot:{s}") for s in battle.seats if s != "A"}
     recorder = EvidenceRecorder(battle)
     with StrategyProcess(version, seed=f"{seed}:bot:A") as strategy:

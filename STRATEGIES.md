@@ -34,8 +34,14 @@ Startup has a separate five-second deadline. Calls use the state's deadline
 (500ms normally). A timeout kills the worker and prevents late actions being
 applied. Import errors, exceptions, invalid actions, and process exits have
 distinct diagnostics. An exception or invalid action causes a silent tick;
-exceptions can recover on the next tick. A terminated worker stays unavailable,
-and normal silent-tick disconnection rules apply. Standard output is redirected
+exceptions can recover on the next tick. CLI and benchmark workers stay unavailable
+after termination. Battle-room workers allow up to two restarts per battle, on
+the next tick after a timeout, exit, or protocol failure. The failed tick remains
+silent and keeps its diagnostic; late actions are discarded. Restarts use a fresh
+source copy and protocol queue, reset bot memory and its seeded random sequence,
+and are recorded in strategy events. Repeated failures still exhaust the restart
+budget and normal silent-tick disconnection rules apply. Explicitly closed workers
+never restart. Standard output is redirected
 away from the protocol. Error details are bounded and stderr is discarded.
 
 This provides process and failure isolation for trusted local Python strategies,

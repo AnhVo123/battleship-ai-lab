@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PythonPreview } from './StrategyWorkbench';
+import { PythonPreview } from './LazyStrategy';
 import type { Team } from './types';
 
 export function StrategyDetails({team,player}:{team:Team;player?:Team}) {

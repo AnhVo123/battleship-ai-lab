@@ -1,9 +1,9 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import ReplayTimeline from './ReplayTimeline';
-import BattleResults, {RankingTable} from './BattleResults';
+import BattleResults, {RankingTable, BoosterDetails} from './BattleResults';
 import App from './App';
 import type { Frame } from './types';
 
@@ -12,12 +12,37 @@ const initial:Frame={tick:0,finished:false,abandoned:false,wind:[0,0],traces:[],
 const final:Frame={...initial,tick:2,finished:true,history_id:'history1',ranking:[{rank:1,seat:'B',name:'Hunt Target · B',score:5,wasted:10,ships_remaining:4},{rank:2,seat:'A',name:'My team',score:3,wasted:12,ships_remaining:2}]};
 
 describe('ranking and replay controls',()=>{
+  it('plays the final recorded ticks at 4x without generating new actions',async()=>{
+    const mock=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>{
+      const path=String(input);
+      if(path==='/api/versions')return new Response('[{"id":"v","label":"Test"}]');
+      if(path==='/api/battles/active')return new Response(JSON.stringify({id:'recorded',frame:{...initial,tick:120,finished:true}}));
+      if(path.includes('/frames/')){const tick=Number(path.split('/').pop());return new Response(JSON.stringify({...initial,tick,finished:tick===120}));}
+      if(path.endsWith('/diagnostics'))return new Response('{"findings":[]}');
+      return new Response('[]');
+    });
+    render(<App/>);
+    await waitFor(()=>expect(screen.getByRole('heading',{name:'Tick 120 / 120'})).toBeTruthy());
+    fireEvent.change(screen.getByRole('slider',{name:'Replay tick'}),{target:{value:'115'}});
+    fireEvent.change(screen.getByRole('combobox',{name:'Playback speed'}),{target:{value:'4'}});
+    fireEvent.click(screen.getByRole('button',{name:'▶ Play'}));
+    await waitFor(()=>expect(screen.getByRole('heading',{name:'Tick 120 / 120'})).toBeTruthy(),{timeout:3000});
+    await waitFor(()=>expect(screen.getByRole('button',{name:'▶ Play'})).toBeTruthy());
+    expect(mock.mock.calls.filter(([url])=>String(url).endsWith('/step'))).toHaveLength(0);
+  });
+  it('shows purchases, consumption, expiration and measured effectiveness',async()=>{
+    render(<BoosterDetails team={{seat:'B',score:4,wasted:0,eliminated:false,connected:true,ships:[],shots:[],boosters:{purchased:{torpedo:1,cluster:3},remaining:{torpedo:0,cluster:2},expired:true,remaining_points:0,stats:{torpedo:{used:1,points:4,hits:2,sinks:1,revealed:0},cluster:{used:1,points:0,hits:0,sinks:0,revealed:0}}}}}/>);
+    fireEvent.click(screen.getByText('Boosters · 2 used'));
+    const table=await screen.findByRole('table',{name:'B booster statistics'});
+    expect(table.textContent).toContain('Expired');
+    expect(table.textContent).toContain('torpedo1104210');
+  });
   it('shows official server order and highlights my team with ships remaining',()=>{
     render(<RankingTable ranking={final.ranking} teams={[]}/>);
     const rows=within(screen.getByRole('table',{name:'Final team ranking'})).getAllByRole('row');
     expect(rows[1].textContent).toContain('Hunt Target');
     expect(rows[2].className).toBe('your-result');
-    expect(within(rows[2]).getAllByRole('cell').map(e=>e.textContent)).toEqual(['2','AMy teamYOU','3','2','Unavailable in this recording']);
+    expect(within(rows[2]).getAllByRole('cell').map(e=>e.textContent)).toEqual(['2','AMy teamYOU','3','2','Unavailable in this recording','Unavailable']);
   });
   it('supports direct seeking, previous/next, restart, pause, and speed selection',()=>{
     const next=vi.fn();
@@ -75,6 +100,9 @@ describe('ranking and replay controls',()=>{
     await waitFor(()=>expect(screen.getByRole('heading',{name:'Tick 1 / 120'})).toBeTruthy());
     fireEvent.click(screen.getByRole('button',{name:'Next →'}));
     await waitFor(()=>expect(finish).toBeTypeOf('function'));
+    fireEvent.change(screen.getByRole('combobox',{name:'Playback speed'}),{target:{value:'4'}});
+    fireEvent.click(screen.getByRole('button',{name:'Next →'}));
+    expect(steps).toBe(2);
     fireEvent.change(screen.getByRole('slider',{name:'Replay tick'}),{target:{value:'0'}});
     await act(async()=>{finish!(new Response(JSON.stringify(final)));});
     expect(screen.getByRole('heading',{name:'Tick 0 / 120'})).toBeTruthy();

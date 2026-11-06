@@ -83,6 +83,19 @@ class WebTests(unittest.TestCase):
         self.assertTrue(all(len(p)==3 for p in first['traces'][0]['points']))
         self.assertEqual(self.client.get(f'/api/battles/{battle}/frames/0').json(),zero)
         self.assertEqual(self.client.get(f'/api/battles/{battle}/frames/1').json(),first)
+
+    def test_battle_recovers_after_worker_exit(self):
+        source = SOURCE.replace("  return dict", "  if s['tick'] == 1:\n   import os\n   os._exit(7)\n  return dict")
+        identifier = self.upload(source)
+        created = self.client.post('/api/battles', json=dict(version=identifier, teams=2, difficulty='easy'))
+        self.assertEqual(created.status_code, 201, created.text)
+        battle = created.json()['id']
+        first = self.client.post(f'/api/battles/{battle}/step')
+        self.assertEqual(first.status_code, 200, first.text)
+        second = self.client.post(f'/api/battles/{battle}/step')
+        self.assertEqual(second.status_code, 200, second.text)
+        self.assertEqual(second.json()['tick'], 2)
+        self.assertTrue(any(t['seat'] == 'A' for t in second.json()['traces']))
         self.assertEqual(self.client.get(f'/api/battles/{battle}/frames/99').status_code,404)
         self.assertEqual(self.client.delete(f'/api/battles/{battle}').status_code,200)
         self.assertEqual(self.client.post(f'/api/battles/{battle}/step').status_code,404)
@@ -118,7 +131,7 @@ class WebTests(unittest.TestCase):
 
     def test_job_validation_and_failure(self):
         identifier = self.upload()
-        for overrides in (dict(matches=99),dict(versions=[identifier,identifier]),dict(pool='bad'),dict(round='bad')):
+        for overrides in (dict(matches=0),dict(versions=[identifier,identifier]),dict(pool='bad'),dict(round='bad')):
             body = dict(versions=[identifier]);body.update(overrides)
             self.assertEqual(self.client.post('/api/benchmarks',json=body).status_code,422)
         with patch('battleship_lab.web.benchmark',side_effect=RuntimeError('failed')):
@@ -200,6 +213,22 @@ class WebTests(unittest.TestCase):
         self.assertEqual(replay.json()['tick'],1)
         prompt = self.client.get(f'/api/experiments/{experiments[0]}/prompt?round=round1&strategy=0&match=0')
         self.assertIn('invalid_action',prompt.text)
+
+
+    def test_tick_checked_requests_are_idempotent_and_opponents_have_purchases(self):
+        version = self.upload()
+        battle = self.client.post('/api/battles',json=dict(version=version,round='round2',seed=7,loadout={'flare':2})).json()
+        identifier = battle['id']
+        opponent = battle['frame']['teams'][1]['boosters']
+        self.assertEqual(opponent['purchased']['flare'],1)
+        self.assertEqual(opponent['purchased']['cluster'],6)
+        first = self.client.post(f'/api/battles/{identifier}/step',json={'expected_tick':0})
+        duplicate = self.client.post(f'/api/battles/{identifier}/step',json={'expected_tick':0})
+        self.assertEqual(first.status_code,200,first.text)
+        self.assertEqual(first.json(),duplicate.json())
+        self.assertEqual(first.json()['tick'],1)
+        self.assertEqual(self.client.post(f'/api/battles/{identifier}/step',json={'expected_tick':2}).status_code,409)
+        self.assertEqual(self.client.post(f'/api/battles/{identifier}/step',json={'expected_tick':True}).status_code,422)
 
 
 if __name__ == '__main__':

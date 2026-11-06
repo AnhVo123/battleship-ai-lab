@@ -1,4 +1,4 @@
-"""Evidence-based local diagnostics. Never infer a bot's intent from its aim."""
+﻿"""Evidence-based local diagnostics. Never infer a bot's intent from its aim."""
 from collections import Counter
 from copy import deepcopy
 import csv
@@ -15,7 +15,11 @@ SCHEMA = 1
 def frame_of(battle):
     return {"tick": battle.tick, "engine_kind": battle.engine_kind, "finished": battle.finished,
             "abandoned": battle.abandoned, "wind": list(battle.wind), "traces": [],
+            "events": deepcopy(battle.events),
             "teams": [{"seat": label, "score": seat.score, "wasted": seat.wasted,
+                       "boosters": {"purchased":dict(battle.purchases[label]), "remaining":dict(seat.boosters),
+                                    "stats":deepcopy(battle.booster_stats[label]), "expired":battle.finished,
+                                    "remaining_points":battle.remaining_points[label]},
                        "eliminated": seat.eliminated, "connected": seat.connected,
                        "ships": [{"name": s.name, "cells": [list(c) for c in s.cells],
                                   "holes": [list(c) for c in sorted(s.holes)], "sunk": s.sunk} for s in seat.ships],
@@ -61,21 +65,7 @@ class EvidenceRecorder:
             event["nearest_post_tick_enemy_distance"] = min((math.dist(cell,c) for c in enemy_cells),default=None)
         self.events.append(event)
         current = frame_of(battle)
-        if event["action"] and event["kind"] != "teleport" and event["results"]:
-            action = event["action"]
-            bearing, elev = math.radians(action["dir"]),math.radians(action["elev"])
-            speed = action["power"]*4
-            flight = event.get("flight_seconds",0)
-            points = []
-            for i in range(21):
-                t = flight*i/20
-                points.append([event["origin"][0]+(-speed*math.cos(elev)*math.cos(bearing)+battle.wind[0])*t,
-                               event["origin"][1]+(speed*math.cos(elev)*math.sin(bearing)+battle.wind[1])*t,
-                               max(0,speed*math.sin(elev)*t-4.9*t*t)])
-            if event["kind"] == "torpedo":
-                points = [[*event["origin"],0],[*event["results"][0][:2],0]]
-            current["traces"] = [{"seat":"A","kind":event["kind"],"points":points,
-                                  "landing":event["results"][0][:2],"result":event["results"][0][2],"flight_seconds":flight}]
+        current["traces"] = battle.traces()
         current["strategy_status"] = event["status"]
         changed = []
         for team, previous in zip(current["teams"], self.previous["teams"]):

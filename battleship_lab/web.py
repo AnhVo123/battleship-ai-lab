@@ -1,10 +1,10 @@
-"""Loopback-only local analysis API. Strategy execution uses the Phase 2 worker."""
+﻿"""Loopback-only local analysis API. Strategy execution uses the Phase 2 worker."""
 import base64
 import binascii
+from copy import deepcopy
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 import json
-import math
 import os
 from pathlib import Path
 import re
@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StrictInt
 
 from .benchmark import benchmark
-from .opponents import Opponent
+from .opponents import Opponent, opponent_loadout
 from .simulation import Battle, RoundConfig
 from .strategies import StrategyProcess, import_strategy
 from .diagnostics import EvidenceRecorder, diagnose, replay_frame, compare_pools, export_report, improvement_prompt
@@ -52,9 +52,13 @@ class BattleOptions(ArmoryOptions):
     difficulty: str = "medium"
 
 
+class StepOptions(BaseModel):
+    expected_tick: StrictInt = Field(ge=0)
+
+
 class BenchmarkOptions(BaseModel):
     versions: list[str] = Field(min_length=1, max_length=4)
-    matches: int = Field(default=100, ge=100, le=1000)
+    matches: int = Field(default=100, ge=1, le=1000)
     teams: int = Field(default=2, ge=2, le=20)
     round: str = "round1"
     difficulty: str = "medium"
@@ -84,11 +88,15 @@ class Session:
     def snapshot(self, traces=None):
         b = self.battle
         frame = {"tick": b.tick, "finished": b.finished, "abandoned": b.abandoned,
-                 "engine_kind": b.engine_kind, "wind": b.wind, "traces": traces or [],
+                 "engine_kind": b.engine_kind, "wind": list(b.wind), "traces": traces or [],
+                 "events": b.events,
                  "teams": [{"seat": label, "name":self.team_names.get(label,"Your strategy" if label == "A" else f"Opponent {label}"),"score": seat.score, "wasted": seat.wasted,
                             "strategy": self.team_strategies.get(label),
+                            "boosters": {"purchased": b.purchases[label], "remaining": dict(seat.boosters),
+                                         "stats": b.booster_stats[label], "expired": b.finished,
+                                         "remaining_points": b.remaining_points[label]},
                             "eliminated": seat.eliminated, "connected": seat.connected,
-                            "ships": [{"name": s.name, "cells": s.cells, "holes": sorted(s.holes), "sunk": s.sunk} for s in seat.ships],
+                            "ships": [{"name": s.name, "cells": [list(c) for c in s.cells], "holes": [list(c) for c in sorted(s.holes)], "sunk": s.sunk} for s in seat.ships],
                             "shots": seat.last_results} for label, seat in b.seats.items()],
                  "strategy_status": self.strategy.last_status,
                  "runtime_error": self.strategy.events[-1].get("detail", "") if isinstance(getattr(self.strategy,"events",None),list) and self.strategy.events else "",
@@ -98,53 +106,35 @@ class Session:
                               "ships_remaining":sum(not ship.sunk for ship in b.seats[row["seat"]].ships)}
                              for row in b.results()["ranking"]] if b.finished else []}
         # Freeze replay data before any later mutation of ships or shots.
-        frame = json.loads(json.dumps(frame))
+        frame = deepcopy(frame)
         self.frames.append(frame)
         return frame
 
-    def step(self):
+    def step(self, expected_tick=None):
         with self.lock:
+            if expected_tick is not None:
+                if expected_tick < self.battle.tick:
+                    return self.frames[min(expected_tick + 1, len(self.frames)-1)]
+                if expected_tick > self.battle.tick:
+                    raise HTTPException(409, "Battle tick is ahead of the live state")
             if self.battle.finished:
                 return self.frames[-1]
             if self.recorder is None:
                 self.recorder = EvidenceRecorder(self.battle)
-            actions, origins = {}, {}
+            actions = {}
             for label, seat in self.battle.seats.items():
                 if not seat.connected or seat.eliminated:
                     continue
                 bot = self.strategy if label == "A" else self.opponents[label]
                 action = bot.on_state(self.battle.state(label))
                 actions[label] = action
-                ship = self.battle._valid(seat, action)
-                if ship:
-                    kind = action.get("action", "shot")
-                    if kind != "shot" and not seat.boosters.get(kind, 0):
-                        kind = "shot"
-                    origins[label] = (tuple(ship.cells[0]), dict(action), kind)
             detail = ""
             if isinstance(getattr(self.strategy, "events", None), list) and self.strategy.events:
                 detail = self.strategy.events[-1].get("detail", "")
             self.recorder.begin(self.battle, actions.get("A"), self.strategy.last_status, detail)
             self.battle.step(actions)
             self.recorder.finish(self.battle)
-            traces = []
-            for label, (origin, action, kind) in origins.items():
-                results = self.battle.seats[label].last_results
-                if kind == "teleport" or not results:
-                    continue
-                bearing, elev = math.radians(action["dir"]), math.radians(action["elev"])
-                speed = action["power"] * 4
-                flight = 2*speed*math.sin(elev)/9.8
-                points = []
-                for i in range(21):
-                    t = flight*i/20
-                    points.append([origin[0]+(-speed*math.cos(elev)*math.cos(bearing)+self.battle.wind[0])*t,
-                                   origin[1]+(speed*math.cos(elev)*math.sin(bearing)+self.battle.wind[1])*t,
-                                   max(0, speed*math.sin(elev)*t-4.9*t*t)])
-                if kind == "torpedo":
-                    points = [[*origin, 0], [results[0][0], results[0][1], 0]]
-                traces.append({"seat": label, "kind": kind, "points": points, "landing": results[0][:2],
-                               "result": results[0][2], "flight_seconds": flight})
+            traces = self.battle.traces()
             frame = self.snapshot(traces)
             if self.battle.finished:
                 self.strategy.close()
@@ -314,7 +304,7 @@ def create_app(data_dir=None):
                       "medium":"Random search, then neighbours of hits and revealed cells.",
                       "hard":"Parity search, target pursuit, and flares without a lead.",
                       "expert":"Counts compatible straight ship placements at sampled candidate cells.",
-                      "extreme":"Probability hunter with targeted clusters and clear-axis torpedoes."}
+                      "extreme":"Probability hunter with targeted clusters and clear-line torpedoes."}
         if level not in LEVELS:
             raise HTTPException(404,"Unknown opponent difficulty")
         return {"name":LEVELS[level],"level":level,"official":False,"implementation":"local_approximation",
@@ -368,13 +358,26 @@ def create_app(data_dir=None):
         if body.round == "all":
             raise HTTPException(422, "Select one round for a battle")
         with guard:
+            # The browser is the only client for this loopback app.  A refresh,
+            # hot reload, or abandoned tab can lose the client-side battle id;
+            # reclaim those in-memory sessions before enforcing the retention cap.
+            for identifier, old_session in list(sessions.items()):
+                if len(sessions) >= 8 and identifier != body.carryover_from and old_session.battle.finished:
+                    if old_session.lock.acquire(blocking=False):
+                        try:
+                            old_session.strategy.close()
+                            sessions.pop(identifier, None)
+                        finally:
+                            old_session.lock.release()
             if len(sessions) >= 8:
-                raise HTTPException(409, "Close a battle before opening another")
+                raise HTTPException(409, "Close an active battle before creating another")
             quote = quote_armory(body)
             seed = body.seed if body.seed is not None else secrets.randbelow(2**31)
-            b = Battle(seed, seats=body.teams, config=RoundConfig.preset(body.round),
-                       purchases={"A":body.loadout}, carryover={"A":quote["carryover"]})
-            worker = StrategyProcess(path, seed=f"{seed}:bot:A")
+            config = RoundConfig.preset(body.round)
+            purchases = {s: opponent_loadout(config, body.difficulty, s) for s in "ABCDEFGHIJKLMNOPQRST"[1:body.teams]}
+            b = Battle(seed, seats=body.teams, config=config,
+                       purchases={**purchases,"A":body.loadout}, carryover={"A":quote["carryover"]})
+            worker = StrategyProcess(path, seed=f"{seed}:bot:A", max_restarts=2)
             if worker.last_status != "ready":
                 worker.close()
                 raise HTTPException(422, worker.events)
@@ -399,10 +402,19 @@ def create_app(data_dir=None):
                 raise HTTPException(404, "Unknown battle")
             return sessions[identifier]
 
+    @app.get("/api/battles/active")
+    def active_battle():
+        """Return the local live battle so a refreshed UI can reconnect to it."""
+        with guard:
+            for identifier, session in sessions.items():
+                if not session.battle.finished:
+                    return {"id": identifier, "frame": session.frames[-1]}
+        return None
+
     @app.post("/api/battles/{identifier}/step")
-    def step(identifier: str):
+    def step(identifier: str, body: StepOptions | None = None):
         session = get_session(identifier)
-        frame = session.step()
+        frame = session.step(body.expected_tick if body else None)
         with session.lock:
             if frame["finished"]:
                 persist_result(session)

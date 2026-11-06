@@ -54,7 +54,7 @@ class BenchmarkTests(unittest.TestCase):
         self.assertFalse(set(development) & set(holdout))
         self.assertEqual(seed_pool(), development[:100])
         self.assertNotEqual(seed_pool(master_seed=1), development[:100])
-        for count in (99, 1001, True):
+        for count in (0, 1001, True):
             with self.assertRaises(ValueError):
                 seed_pool(count=count)
 

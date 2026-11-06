@@ -129,6 +129,40 @@ class StrategyTests(unittest.TestCase):
         self.assertEqual(worker.last_status, "timeout")
         self.assertIsNotNone(worker._process.poll())
 
+    def test_battle_worker_recovers_after_timeout_without_late_action(self):
+        code = VALID.replace("return dict", "import time\n        if state['tick'] == 1: time.sleep(1)\n        return dict").replace("dir=90", "dir=state['tick']")
+        worker = self.worker(code, max_restarts=2)
+        self.state['deadline_ms'] = 50
+        self.assertIsNone(worker.on_state(self.state))
+        self.assertEqual(worker.last_status, 'timeout')
+        old_process, old_queue, old_reader = worker._process, worker._messages, worker._reader
+        self.state.update(tick=2, deadline_ms=500)
+        self.assertEqual(worker.on_state(self.state)['dir'], 2)
+        self.assertEqual(worker.last_status, 'ok')
+        self.assertIsNot(worker._process, old_process)
+        self.assertIsNot(worker._messages, old_queue)
+        self.assertIn('restarted', [event['status'] for event in worker.events])
+        self.assertFalse(old_reader.is_alive())
+
+    def test_battle_worker_recovers_after_external_exit(self):
+        worker = self.worker(max_restarts=2)
+        worker._process.kill()
+        worker._process.wait()
+        self.assertIsNotNone(worker.on_state(self.state))
+        self.assertEqual(worker.last_status, 'ok')
+
+    def test_restarts_are_bounded_and_close_does_not_restart(self):
+        code = HEADER + "    def on_state(self, state):\n        import os\n        os._exit(7)\n"
+        worker = self.worker(code, max_restarts=2)
+        for tick in range(1, 5):
+            self.state['tick'] = tick
+            self.assertIsNone(worker.on_state(self.state))
+        self.assertEqual(sum(e['status'] == 'restarted' for e in worker.events), 2)
+        healthy = self.worker(max_restarts=2)
+        healthy.close()
+        self.assertIsNone(healthy.on_state(self.state))
+        self.assertFalse(any(e['status'] == 'restarted' for e in healthy.events))
+
     def test_worker_exit(self):
         worker = self.worker(HEADER + "    def on_state(self, state):\n        import os\n        os._exit(7)\n")
         self.assertIsNone(worker.on_state(self.state))

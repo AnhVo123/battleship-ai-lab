@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { memo, useEffect, useRef, useState } from 'react';
 import Board from './Board';
 import ReplayTimeline from './ReplayTimeline';
+import { BoosterDetails } from './BattleResults';
 import type { Frame } from './types';
 
 type Finding = {id?:string; tick?:number; classification:string; code:string; message:string; evidence: Record<string,unknown>[]};
@@ -26,13 +27,15 @@ export function Findings({diagnostic,onJump}:{diagnostic:Diagnostic;onJump?:(tic
     {findings.length>200 && <p className="fine">Showing 200 markers. The exported evidence contains the full findings.</p>}</>;
 }
 
-export function FailurePanel({battle,tick,onJump,onSaved}:{battle:string;tick:number;onJump:(tick:number)=>void;onSaved?:()=>void}) {
+function FailurePanelView({battle,tick,onJump,onSaved}:{battle:string;tick:number;onJump:(tick:number)=>void;onSaved?:()=>void}) {
   const [diagnostic,setDiagnostic]=useState<Diagnostic|null>(null);
   const [error,setError]=useState('');
   const [saved,setSaved]=useState('');
   useEffect(()=>{let active=true;request<Diagnostic>(`/battles/${battle}/diagnostics`).then(d=>{if(active)setDiagnostic(d);}).catch(e=>{if(active)setError(String(e));});return()=>{active=false;};},[battle,tick]);
   return <section className="panel"><span className="eyebrow">FAILURE REPLAY · RECORDED EVIDENCE</span><h2>Strategy diagnostics</h2>{error && <p role="alert">{error}</p>}{diagnostic && <><Metrics diagnostic={diagnostic}/><Findings diagnostic={diagnostic} onJump={onJump}/></>}<button onClick={()=>{request<Experiment>(`/battles/${battle}/experiments`,{}).then(e=>{setSaved(e.id);onSaved?.();}).catch(e=>setError(String(e)));}}>Save experiment snapshot</button>{saved && <p className="fine">Saved experiment {saved.slice(0,12)}. Open Diagnostics & history to export or generate a prompt.</p>}</section>;
 }
+
+export const FailurePanel=memo(FailurePanelView);
 
 function Metrics({diagnostic}:{diagnostic:Diagnostic}) {
   const metrics = diagnostic.metrics ?? {};
@@ -83,7 +86,7 @@ export default function Diagnostics({battle}:{battle:string}) {
   <div className="benchmark-options"><label>Round<select value={round} onChange={e=>{setRound(e.target.value);setStrategy(0);setMatch(0);resetReplay();}}>{Object.keys(experiment.report?.rounds ?? {}).map(name=><option key={name}>{name}</option>)}</select></label><label>Strategy<select value={strategy} onChange={e=>{setStrategy(Number(e.target.value));setMatch(0);resetReplay();}}>{experiment.report?.rounds[round]?.strategies.map((s,i)=><option key={s.version} value={i}>{i===0?'Baseline':'Candidate'} · {s.version.split(/[\\/]/).pop()?.slice(0,12)}</option>)}</select></label><label>Recorded match<select value={match} onChange={e=>{setMatch(Number(e.target.value));resetReplay();}}>{run?.records.map((r,i)=><option key={i} value={i}>{i+1} · seed {String(r.seed)}</option>)}</select></label></div></>}
   {diagnostic && <><Metrics diagnostic={diagnostic}/><Findings diagnostic={diagnostic} onJump={experiment.kind==='pool_comparison'?undefined:seekReplay}/>{diagnostic.limits?.map(limit=><p className="fine" key={limit}>{limit}</p>)}</>}
   {prompt && <><label>Copyable ChatGPT improvement prompt<textarea rows={12} readOnly value={prompt}/></label><button onClick={()=>{navigator.clipboard.writeText(prompt).then(()=>setCopied(true)).catch(()=>setError('Clipboard unavailable. Select and copy the prompt text.'));}}>{copied?'Copied':'Copy prompt'}</button></>}
-  {experiment.kind!=='pool_comparison' && maxTick>0 && <><h4 className="subheading">Original Failure Replay</h4><p className="fine">Jump to an issue marker or scrub recorded ticks. This loads the original evidence; it does not rerun the strategy.</p><ReplayTimeline tick={replayTick} maxTick={maxTick} playing={replayPlaying} speed={replaySpeed} disabled={false} canNext={replayTick<maxTick&&!replayLoading} onSeek={seekReplay} onNext={()=>seekReplay(replayTick+1)} onToggle={()=>setReplayPlaying(!replayPlaying)} onSpeed={setReplaySpeed}/>{replay && <Board frame={replay}/>}</>}
+  {experiment.kind!=='pool_comparison' && maxTick>0 && <><h4 className="subheading">Original Failure Replay</h4><p className="fine">Jump to an issue marker or scrub recorded ticks. This loads the original evidence; it does not rerun the strategy.</p><ReplayTimeline tick={replayTick} maxTick={maxTick} playing={replayPlaying} speed={replaySpeed} disabled={false} canNext={replayTick<maxTick&&!replayLoading} onSeek={seekReplay} onNext={()=>seekReplay(replayTick+1)} onToggle={()=>setReplayPlaying(!replayPlaying)} onSpeed={setReplaySpeed}/>{replay && <><Board frame={replay} history={experiment.frames} speed={replaySpeed}/>{replay.teams.map(team=><div key={team.seat}><b>Team {team.seat}</b><BoosterDetails team={team}/></div>)}</>}</>}
   </section></>}
   {!experiment && <p className="empty">Save a battle snapshot or complete a benchmark to begin an experiment history. No diagnoses are generated without recorded evidence.</p>}</>;
 }

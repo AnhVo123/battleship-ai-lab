@@ -43,44 +43,56 @@ def import_strategy(source, store):
 
 class StrategyProcess:
     """Persistent worker. Timeouts terminate it; failures are silent actions."""
-    def __init__(self, version, seed=0, startup_timeout=5):
+    def __init__(self, version, seed=0, startup_timeout=5, max_restarts=0):
         self.events = []
         self.last_status = None
+        self._version = Path(version).resolve()
+        self._seed = seed
+        self._startup_timeout = startup_timeout
+        self._restarts_left = max_restarts
+        self._closed = False
+        self._restart_pending = False
+        response = self._start()
+        self._status(response["status"], response.get("detail", ""), 0)
+        if response["status"] != "ready":
+            self.close()
+
+    def _start(self):
         self._temporary = tempfile.TemporaryDirectory()
         self._process = None
-        self._messages = queue.Queue(maxsize=1)
+        self._messages = queue.Queue()
         self._reader = None
         try:
             work = Path(self._temporary.name)
-            for source in Path(version).glob("*.py"):
+            for source in self._version.glob("*.py"):
                 shutil.copyfile(source, work / source.name)
             # Domain-separated bot randomness must not disclose the referee seed.
-            bot_seed = hashlib.sha256(f"battleship-lab:bot:v1:{seed}".encode()).hexdigest()
+            bot_seed = hashlib.sha256(f"battleship-lab:bot:v1:{self._seed}".encode()).hexdigest()
             worker_environment = {key:value for key,value in os.environ.items() if not key.upper().startswith("BATTLESHIP_")}
             self._process = subprocess.Popen(
                 [sys.executable, "-I", "-u", str(Path(__file__).with_name("strategy_worker.py")), str(work), bot_seed],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                 cwd=work, env=worker_environment, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-            self._reader = threading.Thread(target=self._read, daemon=True)
+            self._reader = threading.Thread(target=self._read, args=(self._process.stdout, self._messages), daemon=True)
             self._reader.start()
-            response = self._receive(startup_timeout)
-            self._status(response["status"], response.get("detail", ""), 0)
-            if response["status"] != "ready":
-                self.close()
+            return self._receive(self._startup_timeout)
         except BaseException:
             self.close()
             raise
 
-    def _read(self):
+    def _read(self, stdout, messages):
         try:
             while True:
-                line = self._process.stdout.readline(65537)
+                line = stdout.readline(65537)
                 if not line or len(line) > 65536:
-                    self._messages.put({"status": "worker_exit"})
+                    messages.put({"status": "worker_exit"})
                     return
-                self._messages.put(json.loads(line))
+                response = json.loads(line)
+                if not isinstance(response, dict):
+                    raise ValueError("Expected a worker response object")
+                messages.put(response)
         except (ValueError, OSError):
-            self._messages.put({"status": "protocol_error"})
+            messages.put({"status": "protocol_error"})
 
     def _receive(self, timeout):
         try:
@@ -93,6 +105,16 @@ class StrategyProcess:
         self.events.append({"tick": tick, "status": status, "detail": detail})
 
     def on_state(self, state):
+        if not self._closed and (self._restart_pending or self._process.poll() is not None) and self._restarts_left:
+            self._stop()
+            self._restarts_left -= 1
+            self._restart_pending = False
+            response = self._start()
+            if response.get("status") != "ready":
+                self._status(response.get("status", "protocol_error"), response.get("detail", "Worker restart failed"), state["tick"])
+                self.close()
+                return None
+            self._status("restarted", "Worker restarted; bot memory and random sequence reset", state["tick"])
         if self._process is None or self._process.poll() is not None:
             self._status("worker_exit", "Worker is unavailable", state["tick"])
             return None
@@ -104,12 +126,20 @@ class StrategyProcess:
         except (OSError, ValueError):
             response = {"status": "worker_exit"}
         status = response.get("status", "protocol_error")
-        self._status(status, response.get("detail", ""), state["tick"])
+        detail = response.get("detail", "")
+        if status == "timeout":
+            detail = f"Strategy exceeded the {state['deadline_ms']}ms tick deadline"
+        self._status(status, detail, state["tick"])
         if status in ("timeout", "worker_exit", "protocol_error"):
-            self.close()
+            self._stop()
+            self._restart_pending = True
         return response.get("action") if status == "ok" else None
 
     def close(self):
+        self._closed = True
+        self._stop()
+
+    def _stop(self):
         if self._process is not None:
             if self._process.poll() is None:
                 self._process.kill()

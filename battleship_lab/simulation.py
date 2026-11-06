@@ -102,8 +102,14 @@ class Battle:
         self.seats = {s: Seat(joined=joined is None or s in joined, connected=joined is None or s in joined) for s in sorted(labels)}
         self._shot_targets = {}
         self.remaining_points = {}
+        self.purchases = {}
+        self.booster_stats = {label: {kind: {"used": 0, "points": 0, "hits": 0, "revealed": 0, "sinks": 0} for kind in BOOSTERS} for label in labels}
+        self.events = []
         for label, seat in self.seats.items():
-            budget = self.config.points + (carryover or {}).get(label, 0)
+            credit = (carryover or {}).get(label, 0)
+            if type(credit) is not int or credit < 0 or (credit and self.config.name != "final"):
+                raise ValueError("Invalid carryover")
+            budget = self.config.points + credit
             for booster, count in (purchases or {}).get(label, {}).items():
                 if booster not in self.config.unlocked or type(count) is not int or count < 0:
                     raise ValueError("Invalid booster purchase")
@@ -112,6 +118,7 @@ class Battle:
             if budget < 0:
                 raise ValueError("Booster budget exceeded")
             self.remaining_points[label] = budget
+            self.purchases[label] = dict(seat.boosters)
             for name, length in FLEET.items():
                 seat.ships.append(Ship(name, self._place(length, placement)))
 
@@ -168,6 +175,8 @@ class Battle:
         if self.finished:
             raise RuntimeError("Battle finished")
         self.tick += 1
+        self.events = []
+        before = {label: (seat.score, len(seat.revealed)) for label, seat in self.seats.items()}
         accepted = []
         for label, seat in self.seats.items():
             seat.last_results = []
@@ -189,6 +198,9 @@ class Battle:
                 else:
                     kind = "shot"
             accepted.append((label, ship, action, kind))
+            self.events.append({"seat": label, "kind": kind, "ship": ship.name,
+                                "aim": {k: action[k] for k in ("dir", "elev", "power")},
+                                "origin": list(ship.cells[0]), "from_cells": list(ship.cells)})
         for label, ship, action, kind in accepted:
             if kind == "teleport":
                 indices = [i for i, c in enumerate(ship.cells) if c in ship.holes]
@@ -201,6 +213,8 @@ class Battle:
             if kind == "teleport":
                 continue
             cell = landing(ship.cells[0], action["dir"], action["elev"], action["power"], self.wind)
+            event = next(e for e in self.events if e["seat"] == label)
+            event["landing"] = list(cell)
             if kind == "flare":
                 for c, (owner, target) in board.items():
                     if owner != label and c not in old_holes[id(target)] and abs(c[0] - cell[0]) <= 3 and abs(c[1] - cell[1]) <= 3:
@@ -209,6 +223,7 @@ class Battle:
                 continue
             if kind == "torpedo":
                 cell, target = self._ray(ship, action["dir"], board, old_holes)
+                event["landing"] = list(cell)
                 if target is None:
                     events.append((label, cell, None, None))
                 else:
@@ -217,7 +232,7 @@ class Battle:
                 continue
             cells = [cell]
             if kind == "cluster":
-                previous = {(s[0], s[1]) for s in self.seats[label].shots}
+                previous = {(s[0], s[1]) for s in self.seats[label].shots if s[2] != "flare"}
                 neighbours = [(cell[0] + dr, cell[1] + dc) for dr, dc in ((-1, 0), (0, 1), (1, 0), (0, -1))]
                 eligible = [c for c in neighbours if self.inside(c) and c not in previous and (c not in board or board[c][0] != label)]
                 cells += self.rng.sample(eligible, min(3, len(eligible)))
@@ -261,6 +276,18 @@ class Battle:
             seat.eliminated = all(s.sunk for s in seat.ships)
         self.abandoned = not any(s.connected for s in self.seats.values())
         self.finished = self.abandoned or sum(not s.eliminated for s in self.seats.values()) <= 1 or self.tick >= self.config.tick_cap
+        for event, (label, ship, action, kind) in zip(self.events, accepted):
+            seat = self.seats[label]
+            event.update(cells=list(ship.cells), results=deepcopy(seat.last_results),
+                         points=seat.score-before[label][0],
+                         sunk_cells=[list(c) for target in {id(board[tuple(s[:2])][1]): board[tuple(s[:2])][1] for s in seat.last_results if s[2] == "sunk"}.values() for c in target.cells])
+            if kind in BOOSTERS:
+                stats = self.booster_stats[label][kind]
+                stats["used"] += 1
+                stats["points"] += event["points"]
+                stats["hits"] += sum(s[2] in ("hit", "sunk") for s in seat.last_results)
+                stats["revealed"] += len(seat.revealed)-before[label][1]
+                stats["sinks"] += len({id(board.get(tuple(s[:2]), (None, None))[1]) for s in seat.last_results if s[2] == "sunk"})
         return self.results() if self.finished else None
 
     def _record(self, label, cell, result):
@@ -271,7 +298,8 @@ class Battle:
         seat.wasted += result in ("miss", "wreck", "off_board", "self_hit")
         return entry
 
-    def _ray(self, ship, direction, board, old_holes):
+    @staticmethod
+    def _ray(ship, direction, board, old_holes):
         # Grid traversal through cell boundaries (ties cross both axes).
         angle = math.radians(direction)
         dr, dc = -math.cos(angle), math.sin(angle)
@@ -289,11 +317,33 @@ class Battle:
                 c += 1 if dc > 0 else -1
                 tc += 1 / abs(dc)
             cell = (r, c)
-            if not self.inside(cell):
+            if not Battle.inside(cell):
                 return cell, None
             target = board.get(cell)
             if target and target[1] is not ship and len(old_holes[id(target[1])]) != len(target[1].cells):
                 return cell, target
+
+    def traces(self):
+        """Omniscient presentation data, never included in a bot observation."""
+        traces = []
+        for event in self.events:
+            if event["kind"] == "teleport" or not event["results"]:
+                continue
+            origin, aim, contact = event["origin"], event["aim"], event["landing"]
+            bearing, elev = math.radians(aim["dir"]), math.radians(aim["elev"])
+            speed = aim["power"] * 4
+            flight = 2*speed*math.sin(elev)/9.8
+            points = []
+            for i in range(21):
+                t = flight*i/20
+                points.append([origin[0]+(-speed*math.cos(elev)*math.cos(bearing)+self.wind[0])*t,
+                               origin[1]+(speed*math.cos(elev)*math.sin(bearing)+self.wind[1])*t,
+                               max(0, speed*math.sin(elev)*t-4.9*t*t)])
+            if event["kind"] == "torpedo":
+                points, flight = [[*origin, 0], [*contact, 0]], 0
+            traces.append({"seat":event["seat"], "kind":event["kind"], "points":points,
+                           "landing":list(contact), "result":event["results"][0][2], "flight_seconds":flight})
+        return traces
 
     def results(self):
         if self.abandoned:

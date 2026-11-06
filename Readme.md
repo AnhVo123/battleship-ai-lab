@@ -1,5 +1,47 @@
 Docs — Game AI Arena
 
+# ⚓ Battleship Strategy Lab
+
+> **Build a bot. Read the battlefield. Outsmart the fleet.**
+
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Game](https://img.shields.io/badge/Game-Battleship-0f766e)](#the-game)
+[![Mode](https://img.shields.io/badge/Mode-Strategy%20Arena-f59e0b)](#how-this-works)
+
+Battleship Strategy Lab is a sandbox for designing, testing, and submitting autonomous Battleship bots. You describe a strategy to Pi, inspect the generated code, run practice battles, tune your approach, and submit when you are ready.
+
+## Quick start
+
+1. Open the web workspace and review the starter bot.
+2. Ask Pi to improve `strategy.py`.
+3. Run **START PRACTICE** to test the latest version.
+4. Use the replay and diagnostics to understand misses, wind, and targeting decisions.
+5. Buy boosters in **ARMORY**, then **SUBMIT** before the round closes.
+
+> [!TIP]
+> The first useful upgrade is usually wind estimation: your bot learns from where its own shells land, not from the hidden wind value itself.
+
+## At a glance
+
+| Area | What matters |
+| --- | --- |
+| **Objective** | Score hits and sink enemy ships before the other seats do |
+| **Arena** | A shared 40 × 40 sea with 2–20 teams |
+| **Bot loop** | One private state update and one action per tick |
+| **Constraint** | 500 ms per turn; invalid or late actions are silent ticks |
+| **Core challenge** | Infer the hidden wind and spend limited reach wisely |
+
+## Contents
+
+- [How this works](#how-this-works)
+- [Event clock](#event-clock)
+- [The game](#the-game)
+- [Writing the bot](#writing-the-bot)
+- [The built-in opponents](#the-built-in-opponents)
+- [Getting help](#getting-help)
+
+---
+
 How this works
 
 You get a workspace with a bot that already plays, and Pi, an AI agent that writes the bot for you. You never edit the code yourself. The loop is short on purpose:
