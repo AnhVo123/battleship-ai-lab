@@ -28,6 +28,7 @@ from .validation import TEMPLATE, validate_source
 
 
 class Upload(BaseModel):
+    check_round: str = 'round1'
     filename: str = "strategy.py"
     source: str = Field(default="", max_length=262144)
     source_base64: str | None = Field(default=None, max_length=349528)
@@ -46,9 +47,10 @@ class ArmoryOptions(BaseModel):
 
 
 class BattleOptions(ArmoryOptions):
+    practice_loadout: bool = False
     version: str
     seed: int | None = None
-    teams: int = Field(default=2, ge=2, le=20)
+    teams: int | None = Field(default=None, ge=2, le=20)
     difficulty: str = "medium"
 
 
@@ -59,7 +61,7 @@ class StepOptions(BaseModel):
 class BenchmarkOptions(BaseModel):
     versions: list[str] = Field(min_length=1, max_length=4)
     matches: int = Field(default=100, ge=1, le=1000)
-    teams: int = Field(default=2, ge=2, le=20)
+    teams: int | None = Field(default=None, ge=2, le=20)
     round: str = "round1"
     difficulty: str = "medium"
     pool: str = "development"
@@ -87,7 +89,7 @@ class Session:
 
     def snapshot(self, traces=None):
         b = self.battle
-        frame = {"tick": b.tick, "finished": b.finished, "abandoned": b.abandoned,
+        frame = {"config": b.config.view(), "tick": b.tick, "finished": b.finished, "abandoned": b.abandoned,
                  "engine_kind": b.engine_kind, "wind": list(b.wind), "traces": traces or [],
                  "events": b.events,
                  "teams": [{"seat": label, "name":self.team_names.get(label,"Your strategy" if label == "A" else f"Opponent {label}"),"score": seat.score, "wasted": seat.wasted,
@@ -210,7 +212,7 @@ def create_app(data_dir=None):
                 config = RoundConfig.preset(name)
                 budget = config.points
                 for booster, count in (loadout or {}).items():
-                    if booster not in config.unlocked or count < 0:
+                    if booster not in config.unlocked or not 0 <= count <= 99:
                         raise ValueError("Booster unavailable in selected round")
                     budget -= BOOSTERS[booster]*count
                 if budget < 0:
@@ -243,7 +245,7 @@ def create_app(data_dir=None):
                 carryover = frame["armory"]["remaining_points"]
         spent = 0
         for name, quantity in body.loadout.items():
-            if name not in config.unlocked or type(quantity) is not int or quantity < 0:
+            if name not in config.unlocked or type(quantity) is not int or not 0 <= quantity <= 99:
                 raise HTTPException(422,"Invalid booster purchase for this round")
             spent += BOOSTERS[name]*quantity
         budget = config.points+carryover
@@ -251,7 +253,7 @@ def create_app(data_dir=None):
             raise HTTPException(422,"Booster budget exceeded")
         return {"round":body.round,"budget":budget,"carryover":carryover,"spent":spent,
                 "remaining":budget-spent,"unlocked":list(config.unlocked),"costs":BOOSTERS,
-                "eligibility":"Advancement is declared locally; the README does not specify an organizer qualification cutoff."}
+                "eligibility":"Rule 2.5: top 6 per Round 1 group; top 3 per Round 2 group. Advancement is declared locally."}
 
     @app.get("/api/health")
     def health():
@@ -270,13 +272,35 @@ def create_app(data_dir=None):
         result = validate_source(body.source)
         if not result["valid"]:
             return result
+        try:
+            config = RoundConfig.preset(body.check_round)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        # Rule 11.8 grants check inventory independently of the team's Armory.
+        config.tick_cap = 20
+        config.points = sum(config.view()['boosters']['costs'][kind] for kind in config.unlocked)
+        loadout = dict.fromkeys(config.unlocked, 1)
+        battle = Battle(20261106, config=config,
+                        purchases={s:dict(loadout) for s in 'ABCDEFGHIJ'[:config.seats]})
+        opponents = {s:Opponent('medium',f'check:{s}') for s in battle.seats if s != 'A'}
         with tempfile.TemporaryDirectory() as temp:
             folder = Path(temp)
             (folder/"strategy.py").write_text(body.source,encoding="utf-8")
             with StrategyProcess(folder,seed="validation-only") as worker:
-                return {"valid":worker.last_status == "ready",
-                        "errors":[] if worker.last_status == "ready" else [{"line":None,"message":e["detail"] or e["status"]} for e in worker.events],
-                        "note":"Runtime import/interface check only; on_state actions are validated during battle."}
+                if worker.last_status == 'ready':
+                    while not battle.finished:
+                        actions = {}
+                        for seat, bot in {'A':worker, **opponents}.items():
+                            if battle.seats[seat].connected and not battle.seats[seat].eliminated:
+                                actions[seat] = bot.on_state(battle.state(seat))
+                        if worker.last_status != 'ok':
+                            break
+                        battle.step(actions)
+                return {
+                        "errors":[] if worker.last_status in ('ready','ok') else [{"line":None,"message":e["detail"] or e["status"]} for e in worker.events if e['status'] not in ('ready','ok')],
+                        "valid":worker.last_status == 'ok' and battle.tick == 20,
+                        "ticks":battle.tick,
+                        "note":"Local 20-tick check with round boosters and 500 ms wall-clock limit. Official Practice uses bot CPU time; this is not official acceptance."}
 
     @app.post("/api/armory")
     def armory(body: ArmoryOptions):
@@ -374,7 +398,8 @@ def create_app(data_dir=None):
             quote = quote_armory(body)
             seed = body.seed if body.seed is not None else secrets.randbelow(2**31)
             config = RoundConfig.preset(body.round)
-            purchases = {s: opponent_loadout(config, body.difficulty, s) for s in "ABCDEFGHIJKLMNOPQRST"[1:body.teams]}
+            body.teams = body.teams or config.seats
+            purchases = {s: dict(body.loadout) if body.practice_loadout else opponent_loadout(config, body.difficulty, s) for s in "ABCDEFGHIJKLMNOPQRST"[1:body.teams]}
             b = Battle(seed, seats=body.teams, config=config,
                        purchases={**purchases,"A":body.loadout}, carryover={"A":quote["carryover"]})
             worker = StrategyProcess(path, seed=f"{seed}:bot:A", max_restarts=2)

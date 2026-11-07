@@ -34,12 +34,13 @@ class Opponent(Bot):
         self.wind = [0., 0.]
         self.samples = 0
         self.previous = None
+        self.gravity, self.speed_per_power, self.power_max = 9.8, 4, 5
 
     def _learn(self, state):
         if self.previous and state["last_results"]:
             origin, action, flight = self.previous
             cell = state["last_results"][0]
-            baseline = landing(origin, action["dir"], action["elev"], action["power"])
+            baseline = landing(origin, action["dir"], action["elev"], action["power"], gravity=self.gravity, speed_per_power=self.speed_per_power)
             if flight > .1:
                 self.samples += 1
                 for axis in (0, 1):
@@ -48,38 +49,42 @@ class Opponent(Bot):
         self.previous = None
 
     def _aim(self, ships, target):
+        max_speed = self.power_max * self.speed_per_power
         for ship in self.rng.sample(ships, len(ships)):
             origin = ship["cells"][0]
             dr, dc = target[0] - origin[0], target[1] - origin[1]
             elev = None
             for _ in range(4):
                 distance = math.hypot(dr, dc)
-                if distance > 400 / 9.8:
+                if distance > max_speed**2 / self.gravity:
                     elev = None
                     break
-                elev = math.asin(min(1, distance * 9.8 / 400)) / 2
-                flight = 40 * math.sin(elev) / 9.8
+                elev = math.asin(min(1, distance * self.gravity / max_speed**2)) / 2
+                flight = 2 * max_speed * math.sin(elev) / self.gravity
                 dr = target[0] - origin[0] - self.wind[0] * flight
                 dc = target[1] - origin[1] - self.wind[1] * flight
             if elev is not None:
                 return {"ship": ship["ship"], "dir": math.degrees(math.atan2(dc, -dr)) % 360,
-                        "elev": math.degrees(elev), "power": 5}
+                        "elev": math.degrees(elev), "power": self.power_max}
         return None
 
     @staticmethod
-    def _probability(cell, blocked, hits):
+    def _probability(cell, blocked, hits, rows=36, cols=36):
         # Count compatible straight placements covering this candidate cell.
         total = 0
         for length in (2, 3, 3, 4, 5):
             for dr, dc in ((0, 1), (1, 0)):
                 for offset in range(length):
                     cells = {(cell[0] + (i-offset)*dr, cell[1] + (i-offset)*dc) for i in range(length)}
-                    if all(0 <= r < 40 and 0 <= c < 40 for r, c in cells) and not cells & blocked:
+                    if all(0 <= r < rows and 0 <= c < cols for r, c in cells) and not cells & blocked:
                         total += 1 + 15 * len(cells & hits)
         return total
 
     def on_state(self, state):
+        physics = state['config']['physics']
+        self.gravity, self.speed_per_power, self.power_max = physics['gravity'], physics['speed_per_power'], physics['power_max']
         self._learn(state)
+        rows, cols = state["config"]["map"]["rows"], state["config"]["map"]["cols"]
         ships = [s for s in state["you"]["ships"] if not s["sunk"]]
         shots = state["your_shots"]
         tried = {tuple(s[:2]) for s in shots if s[2] != "flare"}
@@ -88,17 +93,17 @@ class Opponent(Bot):
         blocked = own | {tuple(s[:2]) for s in shots if s[2] in ("miss", "sunk", "wreck", "self_hit")}
         revealed = {tuple(c) for c in state["revealed"]}
         neighbours = {(r+dr, c+dc) for r, c in hits for dr, dc in ((-1,0),(1,0),(0,-1),(0,1))}
-        candidates = {(self.rng.randrange(40), self.rng.randrange(40)) for _ in range(80)}
+        candidates = {(self.rng.randrange(rows), self.rng.randrange(cols)) for _ in range(80)}
         candidates |= revealed
         if self.level != "easy":
             candidates |= neighbours
-        candidates = [c for c in sorted(candidates) if 0 <= c[0] < 40 and 0 <= c[1] < 40 and c not in own and
+        candidates = [c for c in sorted(candidates) if 0 <= c[0] < rows and 0 <= c[1] < cols and c not in own and
                       (self.level == "easy" or c not in tried) and
                       (self.level not in ("hard", "expert", "extreme") or c in neighbours | revealed or sum(c) % 2 == 0)]
         self.rng.shuffle(candidates)
         candidates.sort(key=lambda c: c in revealed, reverse=True)
         if self.level in ("expert", "extreme"):
-            candidates.sort(key=lambda c: (c in revealed, self._probability(c, blocked, hits)), reverse=True)
+            candidates.sort(key=lambda c: (c in revealed, self._probability(c, blocked, hits, rows, cols)), reverse=True)
         elif self.level != "easy":
             candidates.sort(key=lambda c: (c in revealed, c in neighbours), reverse=True)
         action = None
@@ -108,7 +113,7 @@ class Opponent(Bot):
             if action:
                 break
         if action is None:
-            action = {"ship": ships[0]["ship"], "dir": self.rng.uniform(0, 360), "elev": 45, "power": 5}
+            action = {"ship": ships[0]["ship"], "dir": self.rng.uniform(0, 360), "elev": 45, "power": self.power_max}
         boosters = state["you"]["boosters"]
         threatened = [s for s in ships if s.get("holed")]
         if boosters.get("teleport", 0) and threatened:
@@ -128,7 +133,7 @@ class Opponent(Bot):
                     target_ship = Ship("observed", [cell])
                     board[cell] = ("enemy", target_ship)
                     holes = {id(s): set() for _, s in board.values()}
-                    _, target_hit = Battle._ray(source, direction, board, holes)
+                    _, target_hit = Battle._ray(source, direction, board, holes, rows, cols)
                     if target_hit and target_hit[0] == "enemy":
                         action.update(action="torpedo", ship=firing["ship"], dir=direction)
                         break
@@ -142,6 +147,6 @@ class Opponent(Bot):
                 action["action"] = "cluster"
         if action.get("action") not in ("torpedo", "teleport"):
             origin = next(s["cells"][0] for s in ships if s["ship"] == action["ship"])
-            flight = 2 * action["power"] * 4 * math.sin(math.radians(action["elev"])) / 9.8
+            flight = 2 * action["power"] * self.speed_per_power * math.sin(math.radians(action["elev"])) / self.gravity
             self.previous = (origin, dict(action), flight)
         return action

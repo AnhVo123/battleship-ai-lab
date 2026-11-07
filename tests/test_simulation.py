@@ -32,7 +32,7 @@ class SimulationTests(unittest.TestCase):
         self.assertEqual(a.wind, b.wind)
         self.assertEqual(a.state("A"), b.state("A"))
         cells = [(owner, ship, c) for owner, seat in a.seats.items() for ship in seat.ships for c in ship.cells]
-        self.assertEqual(len(cells), 34)
+        self.assertEqual(len(cells), 170)
         for owner, ship, c in cells:
             self.assertTrue(a.inside(c))
             for other_owner, other, d in cells:
@@ -115,7 +115,7 @@ class SimulationTests(unittest.TestCase):
     def test_torpedo_offboard(self):
         b = self.battle()
         b.step({"A": action("torpedo")})
-        self.assertEqual(b.seats["A"].shots[-1], [10, 40, "off_board"])
+        self.assertEqual(b.seats["A"].shots[-1], [10, b.config.cols, "off_board"])
 
     def test_flare(self):
         b = self.battle()

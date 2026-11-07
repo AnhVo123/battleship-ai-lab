@@ -16,7 +16,7 @@ def action(**extra):
 
 class DiagnosticsTests(unittest.TestCase):
     def setUp(self):
-        self.battle = Battle(42,config=RoundConfig.preset('final'))
+        self.battle = Battle(42,seats=2,config=RoundConfig.preset('final'))
         self.battle.wind = (.5,0)
         self.battle.seats['A'].ships = [Ship('destroyer',[(10,10),(10,11)])]
         self.battle.seats['B'].ships = [Ship('destroyer',[(15,15),(15,16)])]

@@ -22,6 +22,12 @@ def import_strategy(source, store):
             if helper.is_symlink():
                 raise ValueError("Symlink helpers are unsupported")
             files[helper.name] = helper.read_bytes()
+    if sum(map(len, files.values())) > 256 * 1024:
+        raise ValueError("Rule 11.7: total code exceeds 256 KB")
+    reserved = set(sys.stdlib_module_names) | {'arena_sdk', 'numpy', 'scipy', 'networkx', 'sortedcontainers'}
+    for name, content in files.items():
+        if Path(name).stem in reserved:
+            raise ValueError(f"Rule 11.7: library shadowing: {name}")
     digest = hashlib.sha256()
     for name, content in sorted(files.items()):
         digest.update(name.encode() + b"\0" + str(len(content)).encode() + b"\0" + content)

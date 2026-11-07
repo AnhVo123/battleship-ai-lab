@@ -13,7 +13,7 @@ SCHEMA = 1
 
 
 def frame_of(battle):
-    return {"tick": battle.tick, "engine_kind": battle.engine_kind, "finished": battle.finished,
+    return {"config": battle.config.view(), "tick": battle.tick, "engine_kind": battle.engine_kind, "finished": battle.finished,
             "abandoned": battle.abandoned, "wind": list(battle.wind), "traces": [],
             "events": deepcopy(battle.events),
             "teams": [{"seat": label, "score": seat.score, "wasted": seat.wasted,
@@ -270,7 +270,7 @@ def improvement_prompt(payload):
     frames = payload.get("frames", [])
     if frames:
         frame = frames[-1]
-        lines.append("Battle round/rules: " + compact(frame.get("armory", {})))
+        lines.append("Battle round/rules: " + compact({"config":frame.get("config", {}),"armory":frame.get("armory", {})}))
         lines.append("Actual strategies (referee-only scores): " + compact([
             {k:t[k] for k in ("seat", "name", "score", "wasted") if k in t} |
             {"version": (t.get("strategy") or {}).get("version", "unavailable")}

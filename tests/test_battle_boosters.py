@@ -82,7 +82,7 @@ class BoosterBattleTests(unittest.TestCase):
                 Battle(config=RoundConfig.preset("final"), carryover={"A":credit})
 
     def test_duplicate_steps_consume_once_and_replay_is_frozen(self):
-        b = Battle(1, config=RoundConfig.preset("round2"), purchases={"A":{"flare":2}})
+        b = Battle(1, seats=2, config=RoundConfig.preset("round2"), purchases={"A":{"flare":2}})
         worker = Mock(last_status="ok", events=[])
         worker.on_state.return_value = dict(ship="carrier",dir=90,elev=30,power=5,action="flare")
         opponent = Mock()
@@ -119,7 +119,7 @@ class BoosterBattleTests(unittest.TestCase):
 
     def test_saved_benchmark_replay_retains_all_team_boosters_and_paths(self):
         from battleship_lab.diagnostics import EvidenceRecorder, replay_frame
-        b = Battle(7, config=RoundConfig.preset("round2"), purchases={s:{"flare":1} for s in "AB"})
+        b = Battle(7, seats=2, config=RoundConfig.preset("round2"), purchases={s:{"flare":1} for s in "AB"})
         recorder = EvidenceRecorder(b)
         actions = {s:dict(ship="carrier",dir=90,elev=30,power=5,action="flare") for s in "AB"}
         recorder.begin(b, actions["A"])

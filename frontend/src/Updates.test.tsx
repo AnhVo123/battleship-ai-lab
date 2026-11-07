@@ -13,13 +13,13 @@ describe('requested existing-feature updates',()=>{
   it('labels all columns A–AN, all rows, and retains picked coordinates while zooming',()=>{
     expect([columnLabel(0),columnLabel(25),columnLabel(26),columnLabel(39)]).toEqual(['A','Z','AA','AN']);
     render(<Board frame={null}/>);
-    expect(document.querySelectorAll('.column-labels span').length).toBe(40);
-    expect(document.querySelectorAll('.row-labels span').length).toBe(40);
+    expect(document.querySelectorAll('.column-labels span').length).toBe(36);
+    expect(document.querySelectorAll('.row-labels span').length).toBe(36);
     fireEvent.keyDown(screen.getByRole('button',{name:'Battle grid coordinate picker'}),{key:'Enter'});
     expect(screen.getByText('A1 · [row 0, col 0]')).toBeTruthy();
     fireEvent.change(screen.getByRole('slider',{name:'Grid zoom'}),{target:{value:'30'}});
     expect(screen.getByText('A1 · [row 0, col 0]')).toBeTruthy();
-    expect(screen.getByText('AN')).toBeTruthy();
+    expect(screen.getByText('AJ')).toBeTruthy();
   });
   it('computes quantity costs and shows overspending',()=>{
     function Wrapper(){const [loadout,setLoadout]=useState<Record<string,number>>({});return <Armory round="final" loadout={loadout} onChange={setLoadout} carryover={null} advanced={false} onAdvanced={()=>{}}/>;}

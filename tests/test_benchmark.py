@@ -47,6 +47,12 @@ class OpponentTests(unittest.TestCase):
 
 
 class BenchmarkTests(unittest.TestCase):
+    def test_v15_all_rounds_publish_correct_default_counts(self):
+        row=dict(abandoned=False,win=1,rank=1,score=0,wasted_shots=0,timeouts=0)
+        with patch('battleship_lab.benchmark.run_match',return_value=row):
+            result=benchmark(['a'],matches=1,round_name='all')
+        self.assertEqual([r['teams'] for r in result['rounds'].values()],[10,6,6])
+        self.assertEqual([r['config']['map']['rows'] for r in result['rounds'].values()],[36,28,28])
     def test_seed_pools_disjoint_stable_and_nested(self):
         development = seed_pool(count=1000)
         holdout = seed_pool("holdout", 1000)

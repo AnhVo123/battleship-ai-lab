@@ -5,13 +5,13 @@ export type Team = {seat: string; name?:string;score: number; wasted: number; el
   boosters?:{purchased:Record<string,number>;remaining:Record<string,number>;expired:boolean;remaining_points:number;stats:Record<string,{used:number;points:number;hits:number;revealed:number;sinks:number}>};
   strategy?:BattleStrategy;ships: {name: string; cells: number[][]; holes: number[][]; sunk: boolean}[]; shots: (string | number)[][]};
 export type RankingRow = {rank:number;seat:string;score:number;wasted:number;name?:string;ships_remaining?:number};
-export type Frame = {tick: number; finished: boolean; abandoned: boolean; wind: number[]; traces: Trace[]; teams: Team[]; strategy_status: string;history_id?:string;
-  events?:{seat:string;kind:string;ship:string;origin:number[];from_cells:number[][];cells:number[][];results:(string|number)[][];points:number;landing?:number[];sunk_cells?:number[][]}[];
+export type Frame = {config?:{map:{rows:number;cols:number};round:string;seats:number;groups:number;advance:number;tick_cap:number};tick: number; finished: boolean; abandoned: boolean; wind: number[]; traces: Trace[]; teams: Team[]; strategy_status: string;history_id?:string;
+  events?:{seat:string;kind:string;ship:string;origin:number[];from_cells:number[][];cells:number[][];results:(string|number)[][];result_points?:number[];points:number;landing?:number[];sunk_cells?:number[][]}[];
   runtime_error?:string;armory?:{round:string;remaining_points:number;inventory:Record<string,number>;expired:boolean};
   ranking: RankingRow[]};
 export type Estimate = {mean?: number | null; rate?: number | null; ci95: (number | null)[]; n: number};
 export type Summary = {matches: number; abandoned: number; win_rate: Estimate; rank: Estimate; score: Estimate; wasted_shots: Estimate; timeouts: Estimate; timeouts_total: number};
-export type Report = {engine_kind: string; pool: string; teams: number; opponent: string; rounds: Record<string, {
+export type Report = {engine_kind: string; pool: string; teams: number; opponent: string; rounds: Record<string, {teams?:number;config?:Frame["config"];
   strategies: {version: string; summary: Summary}[];
   comparisons: {left: string; right: string; paired_matches: number; win: Estimate; rank: Estimate; score: Estimate; wasted_shots: Estimate; timeouts: Estimate}[]}>};
 export type Job = {id: string; status: string; done?: number; total?: number; error?: string; report?: Report};

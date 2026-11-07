@@ -22,12 +22,28 @@ class MyBot(Bot):
 
 def validate_source(content, local_modules=()):
     errors = []
+    if len(content.encode('utf-8') if isinstance(content, str) else content) > 256 * 1024:
+        errors.append({"line":None,"message":"Rule 11.7: total code exceeds 256 KB"})
     try:
         tree = ast.parse(content)
     except (SyntaxError, ValueError, UnicodeError) as exc:
         return {"valid":False,"errors":[{"line":getattr(exc,"lineno",None),"message":f"Syntax: {exc}"}]}
     allowed = set(sys.stdlib_module_names) | {'arena_sdk','numpy','scipy','networkx','sortedcontainers'} | set(local_modules)
     bot_names = set()
+    aliases = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for item in node.names:
+                aliases[item.asname or item.name.split('.')[0]] = item.name
+        elif isinstance(node, ast.ImportFrom):
+            for item in node.names:
+                aliases[item.asname or item.name] = (node.module or '') + '.' + item.name
+    def qualified(node):
+        if isinstance(node, ast.Name):
+            return aliases.get(node.id, node.id)
+        if isinstance(node, ast.Attribute):
+            return qualified(node.value) + '.' + node.attr
+        return ''
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module == 'arena_sdk':
             bot_names.update(item.asname or item.name for item in node.names if item.name == 'Bot')
@@ -41,6 +57,10 @@ def validate_source(content, local_modules=()):
                 errors.append({"line":node.lineno,"message":f"Import is not permitted by the README: {name or 'relative import'}"})
         if isinstance(node,ast.Call) and isinstance(node.func,ast.Name) and node.func.id in ('exec','eval','compile','__import__'):
             errors.append({"line":node.lineno,"message":f"The README disallows {node.func.id}()"})
+        if isinstance(node, ast.Call) and qualified(node.func) in (
+                'os.urandom', 'os.getrandom', 'random.SystemRandom', 'random._urandom',
+                'builtins.exec', 'builtins.eval', 'builtins.compile', 'builtins.__import__'):
+            errors.append({"line":node.lineno,"message":f"Rule 11.7 disallows {qualified(node.func)}"})
         if isinstance(node,ast.Attribute) and isinstance(node.value,ast.Name) and node.value.id == 'os' and node.attr == 'urandom':
             errors.append({"line":node.lineno,"message":"The README disallows os.urandom"})
         if isinstance(node,ast.ImportFrom) and node.module == 'os' and any(a.name == 'urandom' for a in node.names):
@@ -58,4 +78,4 @@ def validate_source(content, local_modules=()):
             if len(args) != 2 or any(default is None for default in method.args.kw_defaults):
                 errors.append({"line":method.lineno,"message":"on_state must accept self and state without additional required arguments"})
     return {"valid":not errors,"errors":errors,
-            "note":"Static validation does not execute imports or prove runtime behavior. Startup and tick failures are reported separately."}
+            "note":"Rulebook v1.5 static checks; dynamic aliases and runtime behavior are not proven. Official acceptance also requires a crash-free 20-tick check battle within 500 ms per tick."}

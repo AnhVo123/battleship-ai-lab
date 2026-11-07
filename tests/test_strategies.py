@@ -180,7 +180,7 @@ class StrategyTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         result = json.loads(completed.stdout)
         self.assertEqual(result["engine_kind"], "local_approximation")
-        self.assertEqual(len(result["ranking"]), 2)
+        self.assertEqual(len(result["ranking"]), 10)
         self.assertTrue(all(e["status"] in ("ready", "ok") for e in result["strategy_events"]))
 
     def test_invalid_actions_become_silent_ticks(self):

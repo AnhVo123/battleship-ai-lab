@@ -36,8 +36,9 @@ def win_ci(wins):
     return {"rate": p, "ci95": [max(0, centre-radius), min(1, centre+radius)], "n": n}
 
 
-def run_match(version, seed, teams=2, round_name="round1", level="medium", loadout=None):
+def run_match(version, seed, teams=None, round_name="round1", level="medium", loadout=None):
     config = RoundConfig.preset(round_name)
+    teams = teams or config.seats
     purchases = {s: opponent_loadout(config, level, s) for s in "ABCDEFGHIJKLMNOPQRST"[1:teams]}
     battle = Battle(seed, seats=teams, config=config, purchases={**purchases, "A": dict(loadout or {})})
     opponents = {s: Opponent(level, f"{seed}:bot:{s}") for s in battle.seats if s != "A"}
@@ -72,8 +73,8 @@ def summarize(records):
             "timeouts_total": sum(r["timeouts"] for r in records)}
 
 
-def benchmark(versions, matches=100, teams=2, round_name="round1", level="medium", pool="development", master_seed=0, loadout=None, progress=None):
-    if type(teams) is not int or not 2 <= teams <= 20:
+def benchmark(versions, matches=100, teams=None, round_name="round1", level="medium", pool="development", master_seed=0, loadout=None, progress=None):
+    if teams is not None and (type(teams) is not int or not 2 <= teams <= 20):
         raise ValueError("teams must be 2–20")
     if level not in LEVELS:
         raise ValueError("Unknown difficulty")
@@ -82,7 +83,7 @@ def benchmark(versions, matches=100, teams=2, round_name="round1", level="medium
         config = RoundConfig.preset(name)
         budget = config.points
         for booster, count in (loadout or {}).items():
-            if booster not in config.unlocked or type(count) is not int or count < 0:
+            if booster not in config.unlocked or type(count) is not int or not 0 <= count <= 99:
                 raise ValueError("Invalid loadout for selected round")
             budget -= BOOSTERS[booster] * count
         if budget < 0:
@@ -117,7 +118,7 @@ def benchmark(versions, matches=100, teams=2, round_name="round1", level="medium
                 comparisons.append({"left": left["version"], "right": right["version"], "direction": "left minus right",
                                     "paired_matches": len(pairs),
                                     **{m: mean_ci([a[m]-b[m] for a,b in pairs]) for m in ("win", *METRICS)}})
-        report["rounds"][name] = {"strategies": runs, "comparisons": comparisons}
+        report["rounds"][name] = {"teams":teams or RoundConfig.preset(name).seats,"config":RoundConfig.preset(name).view(),"strategies": runs, "comparisons": comparisons}
     report["diagnostics"] = benchmark_diagnostics(report)
     return report
 
@@ -127,7 +128,7 @@ def main():
     parser.add_argument("strategies", nargs="+")
     parser.add_argument("--store", default="strategy_versions")
     parser.add_argument("--matches", type=int, default=100)
-    parser.add_argument("--teams", type=int, default=2)
+    parser.add_argument("--teams", type=int, default=None)
     parser.add_argument("--round", choices=("round1", "round2", "final", "all"), default="round1")
     parser.add_argument("--difficulty", choices=tuple(LEVELS), default="medium")
     parser.add_argument("--pool", choices=("development", "holdout"), default="development")
@@ -137,7 +138,7 @@ def main():
     args = parser.parse_args()
     try:
         seed_pool(args.pool, args.matches, args.master_seed)
-        if not 2 <= args.teams <= 20:
+        if args.teams is not None and not 2 <= args.teams <= 20:
             raise ValueError("teams must be 2–20")
         loadout = json.loads(args.loadout)
         if not isinstance(loadout, dict):

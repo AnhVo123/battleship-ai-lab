@@ -55,7 +55,7 @@ class WebTests(unittest.TestCase):
         from battleship_lab.web import Session
         from battleship_lab import Battle
         from unittest.mock import Mock
-        b = Battle(42)
+        b = Battle(42,seats=2)
         worker = Mock(last_status='ok')
         worker.on_state.return_value = dict(ship='carrier',dir=90,elev=45,power=3)
         opponent = Mock()

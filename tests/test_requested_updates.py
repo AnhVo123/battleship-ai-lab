@@ -69,6 +69,28 @@ class UpdateApiTests(unittest.TestCase):
         self.assertFalse(result['valid'])
         self.assertIn('startup failure',result['errors'][0]['message'])
 
+    def test_v15_runtime_check_runs_twenty_ticks_with_round_boosters(self):
+        for round_name in ('round1','round2','final'):
+            result = self.client.post('/api/validate-runtime',json={'source':TEMPLATE,'check_round':round_name}).json()
+            self.assertTrue(result['valid'],result)
+            self.assertEqual(result['ticks'],20)
+        source = TEMPLATE.replace('# Preserve state on self between ticks; a new instance starts each battle.',
+                                  'if state["tick"] == 7: raise RuntimeError("tick seven")')
+        result = self.client.post('/api/validate-runtime',json={'source':source}).json()
+        self.assertFalse(result['valid'])
+        self.assertEqual(result['ticks'],6)
+        self.assertIn('tick seven',result['errors'][0]['message'])
+
+    def test_v15_practice_inventory_matches_player_armory(self):
+        response = self.client.post('/api/battles',json={'version':self.version,'round':'round2',
+                 'loadout':{'flare':1,'cluster':2},'practice_loadout':True,'seed':6})
+        self.assertEqual(response.status_code,201,response.text)
+        frame = response.json()['frame']
+        self.assertEqual(len(frame['teams']),6)
+        self.assertEqual(frame['config']['map'],{'rows':28,'cols':28})
+        for team in frame['teams']:
+            self.assertEqual(team['boosters']['purchased'],{'flare':1,'cluster':2,'torpedo':0,'teleport':0})
+
     def test_opponent_actual_source_is_labeled_custom(self):
         for level in ('easy','medium','hard','expert','extreme'):
             response = self.client.get('/api/opponents/'+level)

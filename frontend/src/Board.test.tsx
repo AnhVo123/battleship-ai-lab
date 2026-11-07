@@ -5,6 +5,21 @@ import Board from './Board';
 import type {Frame} from './types';
 
 afterEach(cleanup);
+it('resizes round boards and clamps keyboard coordinates at each boundary',()=>{
+  const base:Frame={tick:0,finished:false,abandoned:false,wind:[0,0],traces:[],teams:[],strategy_status:'ready',ranking:[]};
+  const {rerender}=render(<Board frame={{...base,config:{map:{rows:36,cols:36},round:'round1',seats:10,groups:2,advance:6,tick_cap:120}}}/>);
+  expect(screen.getByRole('img',{name:'36 by 36 battle board'}).getAttribute('viewBox')).toBe('0 0 36 36');
+  for(const round of ['round2','final']) {
+    rerender(<Board frame={{...base,config:{map:{rows:28,cols:28},round,seats:6,groups:round==='final'?1:2,advance:3,tick_cap:120}}}/>);
+    expect(screen.getByRole('img',{name:'28 by 28 battle board'}).getAttribute('viewBox')).toBe('0 0 28 28');
+    expect(document.querySelectorAll('.column-labels span')).toHaveLength(28);
+    expect(document.querySelectorAll('.row-labels span')).toHaveLength(28);
+    const picker=screen.getByRole('button',{name:'Battle grid coordinate picker'});
+    for(let i=0;i<40;i++)fireEvent.keyDown(picker,{key:'ArrowRight'});
+    for(let i=0;i<40;i++)fireEvent.keyDown(picker,{key:'ArrowDown'});
+    expect(screen.getByText('AB28 · [row 27, col 27]')).toBeTruthy();
+  }
+});
 it('renders only recorded booster effects at the selected tick and scales animation duration',()=>{
   const frame:Frame={tick:3,finished:false,abandoned:false,wind:[0,0],traces:[],strategy_status:'ok',ranking:[],teams:[],events:[
     {seat:'A',kind:'flare',ship:'carrier',origin:[1,1],from_cells:[],cells:[],results:[[10,11,'flare']],points:0},

@@ -3,7 +3,7 @@ import argparse
 import json
 from .simulation import Battle, Bot, RoundConfig
 from .strategies import StrategyProcess, import_strategy, run_imported
-from .opponents import LEVELS, Opponent
+from .opponents import LEVELS, Opponent, opponent_loadout
 
 
 class RandomShooter(Bot):
@@ -20,11 +20,14 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--round", choices=("round1", "round2", "final"), default="round1")
     parser.add_argument("--difficulty", choices=tuple(LEVELS), default="easy")
-    parser.add_argument("--teams", type=int, choices=range(2, 21), default=2)
+    parser.add_argument("--teams", type=int, choices=range(2, 21), default=None)
     args = parser.parse_args()
     try:
         version = import_strategy(args.strategy, args.store)
-        battle = Battle(args.seed, seats=args.teams, config=RoundConfig.preset(args.round))
+        config = RoundConfig.preset(args.round)
+        teams = args.teams or config.seats
+        purchases = {s:opponent_loadout(config,args.difficulty,s) for s in 'ABCDEFGHIJKLMNOPQRST'[1:teams]}
+        battle = Battle(args.seed, seats=teams, config=config, purchases=purchases)
         opponents = {s: Opponent(args.difficulty, f"{args.seed}:bot:{s}") for s in battle.seats if s != "A"}
         with StrategyProcess(version, seed=f"{args.seed}:bot:A") as strategy:
             if strategy.last_status != "ready":

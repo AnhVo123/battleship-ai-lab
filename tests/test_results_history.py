@@ -23,7 +23,7 @@ class RankingOrderTests(unittest.TestCase):
         self.assertEqual(Battle(42).results()['ranking'][0]['seat'],'A')
 
     def test_score_precedes_survival_and_other_tiebreakers(self):
-        battle=Battle(42)
+        battle=Battle(42,seats=2)
         a,b=battle.seats.values()
         a.score,b.score=5,4
         a.wasted,b.wasted=100,0
