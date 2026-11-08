@@ -7,6 +7,25 @@ afterEach(()=>{cleanup();vi.restoreAllMocks();});
 const finding = {tick:3,classification:'confirmed_error',code:'exception',message:'Worker reported exception; no accepted action.',evidence:[{event:'seed:42/tick:3/seat:A',fields:['status']}]};
 
 describe('evidence-based diagnostics',()=>{
+  it('confirms deletion and clears the selected experiment',async()=>{
+    const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
+    const saved={id:'abc',kind:'battle',title:'Delete me',created_at:'2026-11-07',frames:[],diagnostics:{findings:[]}};
+    const mock=vi.spyOn(globalThis,'fetch').mockImplementation(async(input,init)=>{
+      if(init?.method==='DELETE')return new Response('{"deleted":true}');
+      return new Response(JSON.stringify(String(input)==='/api/experiments'?[saved]:saved));
+    });
+    render(<Diagnostics battle=""/>);
+    await screen.findByRole('option',{name:/Delete me/});
+    fireEvent.change(screen.getByLabelText('Experiment history'),{target:{value:'abc'}});
+    await screen.findByRole('heading',{name:'Delete me'});
+    fireEvent.click(screen.getByRole('button',{name:'Delete experiment'}));
+    expect(mock.mock.calls.some(([,init])=>init?.method==='DELETE')).toBe(false);
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button',{name:'Delete experiment'}));
+    await waitFor(()=>expect(screen.queryByRole('heading',{name:'Delete me'})).toBeNull());
+    expect(screen.queryByRole('option',{name:/Delete me/})).toBeNull();
+    expect(mock.mock.calls.some(([url,init])=>url==='/api/experiments/abc'&&init?.method==='DELETE')).toBe(true);
+  });
   it('filters hypotheses and jumps to an actual issue tick',()=>{
     const jump = vi.fn();
     render(<Findings diagnostic={{findings:[finding,{...finding,tick:4,classification:'hypothesis',message:'Review a zero-point booster.'}]}} onJump={jump}/>);

@@ -37,6 +37,60 @@ class WebTests(unittest.TestCase):
             self.assertEqual(len(restarted.get('/api/versions').json()), 2)
             self.assertIn('V1', [v['label'] for v in restarted.get('/api/versions').json()])
 
+    def test_delete_version_persists_and_allows_reupload(self):
+        identifier = self.upload()
+        other = self.upload(SOURCE.replace('dir=90', 'dir=180'))
+        self.assertEqual(self.client.delete(f'/api/versions/{identifier}').status_code, 200)
+        self.assertEqual([v['id'] for v in self.client.get('/api/versions').json()], [other])
+        self.assertEqual(self.client.get(f'/api/versions/{identifier}/source').status_code, 404)
+        self.assertEqual(self.client.delete(f'/api/versions/{identifier}').status_code, 404)
+        self.assertEqual(self.client.delete('/api/versions/invalid').status_code, 404)
+        self.assertTrue((Path(self.temp.name)/'versions'/identifier/'strategy.py').is_file())
+        with TestClient(create_app(self.temp.name)) as restarted:
+            self.assertEqual([v['id'] for v in restarted.get('/api/versions').json()], [other])
+        self.assertEqual(self.upload(), identifier)
+        self.assertEqual(self.client.get(f'/api/versions/{identifier}/source').content, SOURCE.encode())
+
+    def test_delete_saved_benchmark_and_experiment_independently(self):
+        import json
+        identifier = 'a' * 32
+        experiment_id = 'b' * 32
+        root = Path(self.temp.name)
+        (root/'reports'/f'{identifier}.json').write_text('{}')
+        (root/'experiments'/f'{experiment_id}.json').write_text(json.dumps({
+            'id':experiment_id, 'kind':'benchmark', 'title':'Saved report', 'created_at':'2026-11-07'}))
+        self.assertEqual(self.client.delete(f'/api/benchmarks/{identifier}').status_code, 200)
+        self.assertEqual(self.client.get('/api/benchmarks').json(), [])
+        self.assertEqual(self.client.get(f'/api/benchmarks/{identifier}').status_code, 404)
+        self.assertEqual(self.client.get(f'/api/experiments/{experiment_id}').status_code, 200)
+        self.assertEqual(self.client.delete(f'/api/experiments/{experiment_id}').status_code, 200)
+        self.assertEqual(self.client.get('/api/experiments').json(), [])
+        for resource in ('benchmarks', 'experiments'):
+            self.assertEqual(self.client.delete(f'/api/{resource}/invalid').status_code, 404)
+            self.assertEqual(self.client.delete(f'/api/{resource}/{identifier}').status_code, 404)
+        with TestClient(create_app(self.temp.name)) as restarted:
+            self.assertEqual(restarted.get('/api/benchmarks').json(), [])
+            self.assertEqual(restarted.get('/api/experiments').json(), [])
+
+    def test_cannot_delete_running_benchmark(self):
+        import threading
+        release = threading.Event()
+        version = self.upload()
+        def fake_benchmark(*args, **kwargs):
+            release.wait(5)
+            return {'rounds': {}}
+        with patch('battleship_lab.web.benchmark', side_effect=fake_benchmark):
+            identifier = self.client.post('/api/benchmarks', json={'versions':[version]}).json()['id']
+            try:
+                self.assertEqual(self.client.delete(f'/api/benchmarks/{identifier}').status_code, 409)
+            finally:
+                release.set()
+            for _ in range(100):
+                if self.client.get(f'/api/benchmarks/{identifier}').json()['status'] != 'running':
+                    break
+                time.sleep(.01)
+            self.assertEqual(self.client.delete(f'/api/benchmarks/{identifier}').status_code, 200)
+
     def test_reject_bad_upload_and_identifiers(self):
         for body in (dict(filename='x.exe',source=SOURCE),dict(source='invalid ! python'),dict(source='x'*262145)):
             self.assertEqual(self.client.post('/api/versions',json=body).status_code,422)

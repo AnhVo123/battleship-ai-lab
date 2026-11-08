@@ -1,4 +1,4 @@
-﻿import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import Board from './Board';
 import ReplayTimeline from './ReplayTimeline';
 import { BoosterDetails } from './BattleResults';
@@ -11,8 +11,8 @@ type Experiment = {id:string;kind:string;title:string;created_at:string;diagnost
   report?:{pool:string;rounds:Record<string,{strategies:{version:string;records:RecordData[]}[]}>}};
 type History = Pick<Experiment,'id'|'kind'|'title'|'created_at'>;
 
-async function request<T>(path:string, body?:unknown):Promise<T> {
-  const response = await fetch(`/api${path}`,{...(body !== undefined ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {})});
+async function request<T>(path:string, body?:unknown, method?:string):Promise<T> {
+  const response = await fetch(`/api${path}`,{...(method ? {method} : {}),...(body !== undefined ? {method:method ?? 'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {})});
   if(!response.ok) {const value = await response.json();throw new Error(typeof value.detail==='string' ? value.detail : JSON.stringify(value.detail));}
   return response.json() as Promise<T>;
 }
@@ -49,6 +49,7 @@ function Metrics({diagnostic}:{diagnostic:Diagnostic}) {
 }
 
 export default function Diagnostics({battle}:{battle:string}) {
+  const [deleting,setDeleting]=useState(false);
   const [history,setHistory]=useState<History[]>([]);
   const [experiment,setExperiment]=useState<Experiment|null>(null);
   const [error,setError]=useState('');
@@ -67,6 +68,18 @@ export default function Diagnostics({battle}:{battle:string}) {
   const replaySerial=useRef(0);
   function resetReplay(){replaySerial.current++;setReplay(null);setReplayTick(0);setReplayPlaying(false);setReplayLoading(false);}
   async function refresh() {setHistory(await request<History[]>('/experiments'));}
+  async function deleteExperiment() {
+    if (!experiment || deleting || !window.confirm(`Delete experiment "${experiment.title}" permanently? Its saved evidence and replay will be removed. Benchmark reports are kept separately.`)) return;
+    const identifier = experiment.id;
+    setDeleting(true);setError('');
+    try {
+      await request(`/experiments/${identifier}`,undefined,'DELETE');
+      resetReplay();setExperiment(null);setPrompt('');setCopied(false);
+      setHistory(current=>current.filter(value=>value.id!==identifier));
+      setDevelopment(current=>current===identifier?'':current);
+      setValidation(current=>current===identifier?'':current);
+    } catch(e) {setError(String(e));} finally {setDeleting(false);}
+  }
   useEffect(()=>{refresh().catch(e=>setError(String(e)));},[]);
   async function select(id:string) {setError('');setPrompt('');resetReplay();setStrategy(0);setMatch(0);try{const value=await request<Experiment>(`/experiments/${id}`);setExperiment(value);setRound(Object.keys(value.report?.rounds ?? {})[0] ?? '');}catch(e){setError(String(e));}}
   const run = experiment?.report?.rounds[round]?.strategies[strategy];
@@ -79,7 +92,7 @@ export default function Diagnostics({battle}:{battle:string}) {
   async function generatePrompt() {if(!experiment)return;try{const response=await fetch(`/api/experiments/${experiment.id}/prompt?round=${encodeURIComponent(round)}&strategy=${strategy}&match=${match}`);if(!response.ok)throw new Error('Prompt could not be generated');setPrompt(await response.text());setCopied(false);}catch(e){setError(String(e));}}
   return <><section className="panel"><span className="eyebrow">REPRODUCIBLE EXPERIMENTS</span><h2>Diagnostics & history</h2><p className="muted">Original simulation evidence, preserved versions, and clearly labeled interpretations. No AI service is called.</p>{error && <p role="alert" className="error">{error}</p>}
   <div className="controls"><button onClick={()=>{refresh().catch(e=>setError(String(e)));}}>Refresh history</button>{battle && <button onClick={()=>{request<Experiment>(`/battles/${battle}/experiments`,{}).then(async e=>{await refresh();await select(e.id);}).catch(e=>setError(String(e)));}}>Save current battle</button>}</div>
-  <label>Experiment history<select value={experiment?.id ?? ''} onChange={e=>{if(e.target.value)void select(e.target.value);}}><option value="">Select an experiment</option>{history.map(e=><option key={e.id} value={e.id}>{e.created_at.slice(0,19)} · {e.title}</option>)}</select></label>
+  <button disabled={!experiment || deleting} onClick={()=>void deleteExperiment()}>{deleting?'Deleting…':'Delete experiment'}</button><label>Experiment history<select disabled={deleting} value={experiment?.id ?? ''} onChange={e=>{if(e.target.value)void select(e.target.value);}}><option value="">Select an experiment</option>{history.map(e=><option key={e.id} value={e.id}>{e.created_at.slice(0,19)} · {e.title}</option>)}</select></label>
   <details><summary>Compare development against validation</summary><p className="fine">Select compatible benchmark experiments with the same versions, rounds, loadout, opponents, team count and master seed. First is development, second is holdout. Differences are independent-pool observations, not proof of overfitting.</p><div className="input-pair"><label>Development experiment<select value={development} onChange={e=>setDevelopment(e.target.value)}><option value="">Select</option>{history.filter(e=>e.kind==='benchmark').map(e=><option key={e.id} value={e.id}>{e.title} · {e.id.slice(0,8)}</option>)}</select></label><label>Validation experiment<select value={validation} onChange={e=>setValidation(e.target.value)}><option value="">Select</option>{history.filter(e=>e.kind==='benchmark').map(e=><option key={e.id} value={e.id}>{e.title} · {e.id.slice(0,8)}</option>)}</select></label></div><button disabled={!development||!validation} onClick={()=>{request<Experiment>('/experiments/compare-pools',{development,validation}).then(async e=>{await refresh();await select(e.id);}).catch(e=>setError(String(e)));}}>Compare pools</button></details></section>
   {experiment && <><section className="panel"><h3>{experiment.title}</h3><p className="fine">{experiment.id} · {experiment.created_at} · Local approximation</p><div className="controls">{['json','csv','markdown'].map(format=><a className="export-link" key={format} href={`/api/experiments/${experiment.id}/export/${format}`}>Export {format.toUpperCase()}</a>)}<button onClick={()=>void generatePrompt()}>Generate improvement prompt</button></div>
   {experiment.kind==='benchmark' && <><h4 className="subheading">A/B regression analysis</h4><p className="fine">First version is baseline; later version is candidate. Flags use exploratory 95% paired intervals without multiple-testing correction.</p><Findings diagnostic={{findings:experiment.diagnostics.findings.filter(f=>['regression','improvement'].includes(f.code))}}/>

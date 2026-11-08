@@ -1,4 +1,4 @@
-﻿"""Loopback-only local analysis API. Strategy execution uses the Phase 2 worker."""
+"""Loopback-only local analysis API. Strategy execution uses the Phase 2 worker."""
 import base64
 import binascii
 from copy import deepcopy
@@ -181,7 +181,11 @@ def create_app(data_dir=None):
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):
-        # Reject cross-site browser calls to a service that executes local Python.
+        # Local mode protects the process because strategies execute Python code.
+        # Render/public deployments can opt in explicitly; deploys should still
+        # add authentication before exposing this app to untrusted users.
+        if os.environ.get("BATTLESHIP_PUBLIC", "0") == "1":
+            return await call_next(request)
         host = request.headers.get("host", "").split(":")[0]
         origin = request.headers.get("origin")
         allowed = {"http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:8000", "http://localhost:8000"}
@@ -194,7 +198,7 @@ def create_app(data_dir=None):
         if not re.fullmatch(r"[a-f0-9]{64}", identifier):
             raise HTTPException(404, "Unknown version")
         path = versions / identifier
-        if not (path / "strategy.py").is_file():
+        if not (path / "strategy.py").is_file() or (versions / f"{identifier}.deleted").exists():
             raise HTTPException(404, "Unknown version")
         return path
 
@@ -340,7 +344,7 @@ def create_app(data_dir=None):
         with guard:
             return [{"id": p.name, "label": metadata.get(p.name, p.name[:12]),
                      "bytes": (p/"strategy.py").stat().st_size}
-                    for p in sorted(versions.iterdir()) if re.fullmatch(r"[a-f0-9]{64}", p.name) and (p/"strategy.py").is_file()]
+                    for p in sorted(versions.iterdir()) if re.fullmatch(r"[a-f0-9]{64}", p.name) and (p/"strategy.py").is_file() and not (versions / f"{p.name}.deleted").exists()]
 
     @app.post("/api/versions", status_code=201)
     def upload(body: Upload):
@@ -358,6 +362,7 @@ def create_app(data_dir=None):
             path = Path(temp)/"strategy.py"
             path.write_bytes(content)
             version = import_strategy(path, versions)
+            (versions / f"{version.name}.deleted").unlink(missing_ok=True)
             metadata[version.name] = body.label.strip() or body.filename
             save_labels()
             return {"id": version.name, "label": metadata[version.name]}
@@ -366,6 +371,14 @@ def create_app(data_dir=None):
     def source(identifier: str):
         return PlainTextResponse((version_path(identifier)/"strategy.py").read_bytes(),
                                  headers={"Content-Disposition": 'attachment; filename="strategy.py"'})
+
+    @app.delete("/api/versions/{identifier}")
+    def delete_version(identifier: str):
+        with guard:
+            path = version_path(identifier)
+            # Retain source for running workers and historical experiment references.
+            (versions / f"{identifier}.deleted").touch()
+        return {"id": identifier, "deleted": True}
 
     @app.patch("/api/versions/{identifier}")
     def rename(identifier: str, body: Label):
@@ -447,7 +460,7 @@ def create_app(data_dir=None):
 
     def persist_result(session):
         # Called with session.lock held; retries/repeated steps never duplicate history.
-        if session.result_id:
+        if session.result_id and (experiments/f"{session.result_id}.json").is_file():
             return get_experiment(session.result_id)
         identifier = uuid.uuid4().hex
         session.frames[-1]["history_id"] = identifier
@@ -554,6 +567,16 @@ def create_app(data_dir=None):
             return {"id": identifier, "status": "complete", "report": json.loads(path.read_text(encoding="utf-8"))}
         raise HTTPException(404, "Unknown benchmark")
 
+    @app.delete("/api/benchmarks/{identifier}")
+    def delete_benchmark(identifier: str):
+        with guard:
+            value = job(identifier)
+            if value["status"] == "running":
+                raise HTTPException(409, "Wait for the benchmark to finish before deleting it")
+            (reports/f"{identifier}.json").unlink(missing_ok=True)
+            jobs.pop(identifier, None)
+        return {"id": identifier, "deleted": True}
+
     @app.get("/api/experiments")
     def experiment_history():
         items = []
@@ -565,6 +588,16 @@ def create_app(data_dir=None):
     @app.get("/api/experiments/{identifier}")
     def experiment(identifier: str):
         return get_experiment(identifier)
+
+    @app.delete("/api/experiments/{identifier}")
+    def delete_experiment(identifier: str):
+        with guard:
+            get_experiment(identifier)
+            (experiments/f"{identifier}.json").unlink()
+            for value in jobs.values():
+                if value.get("experiment_id") == identifier:
+                    value.pop("experiment_id")
+        return {"id": identifier, "deleted": True}
 
     @app.get("/api/experiments/{identifier}/export/{format}")
     def export_experiment(identifier: str, format: str):

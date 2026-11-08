@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: battleship-strategy-lab
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: BATTLESHIP_PUBLIC
+        value: "1"

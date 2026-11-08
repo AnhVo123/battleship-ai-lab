@@ -16,6 +16,22 @@ For hot reload, run `powershell -File scripts/dev.ps1` after setup; the UI is
 at http://127.0.0.1:5173 and proxies `/api` to FastAPI. The script closes its
 backend when the frontend exits. No cloud service, account, or paid API is used.
 
+## Render Free deployment
+
+The repository includes a `Dockerfile` and `render.yaml` for a Render Web
+Service. Push the repository to GitHub, create a Render Web Service from it,
+and choose the Free plan. Render builds the React UI and starts FastAPI on the
+port supplied by `PORT`.
+
+The public deployment sets `BATTLESHIP_PUBLIC=1` because the local-only host
+check otherwise rejects Render's hostname. This application executes uploaded
+Python strategies and has no authentication, so use the public deployment only
+for a trusted demo. Do not upload untrusted strategies or expose it as a
+multi-user service without adding authentication and stronger isolation.
+
+Render Free has an ephemeral filesystem. Data under `local_data/` can be lost
+after a restart or redeploy; use persistent storage if results must survive.
+
 ## Workflow
 
 - Upload a UTF-8 `.py` file defining `MyBot(Bot)`. The browser preserves its
